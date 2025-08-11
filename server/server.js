@@ -20,17 +20,21 @@ mongoose.connect(process.env.MONGO_URI, {
 
 // User Schema
 const userSchema = new mongoose.Schema({
-    username: { type: String, required: true, unique: true },
+    username: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
     password: { type: String, required: true }
 });
-const User = mongoose.model('User', userSchema);
+const User = mongoose.model('User', userSchema, 'usercredentials');
 
 // Register
 app.post('/register', async (req, res) => {
     try {
-        const { username, password } = req.body;
+        const { username, email, password } = req.body;
+        if (!username || !email || !password) {
+            return res.status(400).json({ error: 'All fields are required' });
+        }
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newUser = new User({ username, password: hashedPassword });
+        const newUser = new User({ username, email, password: hashedPassword });
         await newUser.save();
         res.json({ message: 'User registered successfully' });
         return;
@@ -43,8 +47,8 @@ app.post('/register', async (req, res) => {
 // Login
 app.post('/login', async (req, res) => {
     try {
-        const { username, password } = req.body;
-        const user = await User.findOne({ username });
+        const { email, password } = req.body;
+        const user = await User.findOne({ email });
         if (!user) {
             res.status(400).json({ error: 'User not found' });
             return;
