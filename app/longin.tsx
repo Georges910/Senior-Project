@@ -111,8 +111,23 @@ const Login = () => {
 			<button onClick={handleLogin} style={{ padding: 10, fontSize: 16, background: '#0070f3', color: '#fff', border: 'none', borderRadius: 4 }}>
 				Login
 			</button>
+			<button
+				onClick={() => router.push('./signup')}
+				style={{
+					padding: 10,
+					fontSize: 16,
+					background: '#4CAF50',
+					color: '#fff',
+					border: 'none',
+					borderRadius: 4
+				}}
+			>
+				Sign Up
+			</button>
 			{error && <div style={{ color: 'red', marginTop: 8 }}>{error}</div>}
 		</div>
+
+		
 	);
 };
 

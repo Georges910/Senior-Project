@@ -4,7 +4,7 @@ import { Link, useRouter } from 'expo-router';
 export default function Home() {
   const router = useRouter();
   const handleLogout = () => {
-    router.replace('/longin');
+    router.replace('/login');
   };
   return (
     <div style={{ maxWidth: 400, margin: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 16, minHeight: '80vh' }}>
