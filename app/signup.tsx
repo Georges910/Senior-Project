@@ -49,7 +49,7 @@ export default function SignupScreen() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/register`, {
+      const res = await fetch(`${API_URL}/api/auth/register`, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({ fullName, parish, email, password }),
