@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_URL = "http://localhost:3000"
 
@@ -21,6 +22,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const onLogin = async () => {
@@ -31,7 +33,9 @@ export default function Login() {
     return;
   }
   setLoading(true);
+
   try {
+    setErrorMsg('');
     const res = await fetch(`${API_URL}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -43,15 +47,31 @@ export default function Login() {
     console.log("Response body:", data);
 
     if (!res.ok) {
-      Alert.alert("Error", data.error || "Login failed");
+      setErrorMsg(data.error || "Login failed");
       return;
     }
 
-    Alert.alert("Success", "Login successful");
-    router.replace("/home");
+    // Save JWT token
+    if (data.token) {
+      await AsyncStorage.setItem('jwtToken', data.token);
+    }
+    // Fetch user profile after successful login with token
+  let profile: any = {};
+    if (data.token) {
+      const profileRes = await fetch(`${API_URL}/api/auth/profile`, {
+        headers: { 'Authorization': `Bearer ${data.token}` }
+      });
+      profile = await profileRes.json();
+      if (profile.fullName && profile.parish && profile.email) {
+        await AsyncStorage.setItem('userProfile', JSON.stringify({ fullName: profile.fullName, parish: profile.parish, email: profile.email }));
+      }
+    }
+  Alert.alert("Success", "Login successful");
+  setErrorMsg('');
+  router.replace("/home");
   } catch (err) {
     console.error("Login error:", err);
-    Alert.alert("Error", "Could not connect to server");
+  setErrorMsg("Could not connect to server");
   } finally {
     setLoading(false);
   }
@@ -100,7 +120,6 @@ export default function Login() {
             />
           </View>
 
-          
           <View style={styles.inputRow}>
             <Ionicons
               name="lock-closed-outline"
@@ -140,6 +159,11 @@ export default function Login() {
               {loading ? "Logging in..." : "Login"}
             </Text>
           </TouchableOpacity>
+
+          {/* Error message under login button */}
+          {errorMsg ? (
+            <Text style={{ color: 'red', marginTop: 8, textAlign: 'center', fontSize: 13 }}>{errorMsg}</Text>
+          ) : null}
 
           <Text style={styles.or}>or</Text>
 

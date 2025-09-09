@@ -22,7 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 export type PrayerItem = { id: string; time: string; titleAr: string };
 export type EventItem = { id: string; title: string; parish: string; dateLabel: string; imageUrl: string };
 export type VerseOfDay = { id: string; imageUrl: string; verseText: string; reference: string };
-export type UserProfile = { fullName: string; parish: string; avatarUrl?: string };
+export type UserProfile = { fullName: string; parish: string; email?: string; avatarUrl?: string };
 
 // ---------- HomeScreen ----------
 const HomeScreen: React.FC = () => {
@@ -39,8 +39,20 @@ const HomeScreen: React.FC = () => {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [u, v, p, e] = await Promise.all([
-        Api.getUserProfile(),
+      // Always fetch user profile from server using JWT token
+      let u = null;
+      const token = await AsyncStorage.getItem('jwtToken');
+      if (token) {
+        const API_URL = 'http://localhost:3000'; // or your actual API URL
+        const profileRes = await fetch(`${API_URL}/api/auth/profile`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (profileRes.ok) {
+          u = await profileRes.json();
+        }
+      }
+      // You can still fetch other data as before
+      const [v, p, e] = await Promise.all([
         Api.getVerseOfDay(),
         Api.getPrayerScheduleForSelectedChurch(),
         Api.getRecommendedEvents(),
@@ -55,7 +67,10 @@ const HomeScreen: React.FC = () => {
   }, []);
 
   const router = useRouter();
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Clear user credentials from AsyncStorage
+    await AsyncStorage.removeItem('userProfile');
+    await AsyncStorage.removeItem('jwtToken');
     router.replace('/login');
   };
 

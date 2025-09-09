@@ -1,3 +1,14 @@
+// JWT authentication middleware
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token provided' });
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Invalid token' });
+    req.user = user;
+    next();
+  });
+}
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -43,13 +54,10 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
 
-    if (!user) {
-      return res.status(400).json({ error: 'User not found' });
-    }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ error: 'Invalid password' });
+
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(400).json({ error: 'Email or password is invalid' });
     }
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1h' });
@@ -60,17 +68,17 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Profile route
-router.get("/profile", async (req, res) => {
+// Profile route (requires authentication)
+router.get("/profile", authenticateToken, async (req, res) => {
   try {
-    const user = await User.findOne().select("fullName parish"); // only get fullName & parish
+    const user = await User.findById(req.user.id).select("fullName parish email");
     if (!user) {
-      return res.status(404).json({ error: "No users found" });
+      return res.status(404).json({ error: "User not found" });
     }
-
     res.json({
       fullName: user.fullName,
       parish: user.parish,
+      email: user.email,
     });
   } catch (err) {
     console.error(err);

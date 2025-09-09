@@ -5,7 +5,9 @@ import {
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
-const API_URL = "http://localhost:3000"
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const API_URL = "http://192.168.10.249:3000";
 
 
 
@@ -18,6 +20,7 @@ export default function SignupScreen() {
   const [agree, setAgree] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const router = useRouter();
 
   function validateEmail(e: string) {
@@ -26,24 +29,29 @@ export default function SignupScreen() {
   }
 
   async function onSignUp() {
+    setErrorMsg('');
     if (!fullName.trim() || !parish.trim() || !email.trim() || !password || !retype) {
-      Alert.alert('Validation', 'Please fill all fields.');
+      setErrorMsg('Please fill all fields.');
+      return;
+    }
+    if (fullName.length > 20) {
+      setErrorMsg('Full name cannot be more than 20 characters.');
       return;
     }
     if (!validateEmail(email)) {
-      Alert.alert('Validation', 'Please enter a valid email.');
+      setErrorMsg('Please enter a valid email.');
       return;
     }
     if (password.length < 6) {
-      Alert.alert('Validation', 'Password must be at least 6 characters.');
+      setErrorMsg('Password must be at least 6 characters.');
       return;
     }
     if (password !== retype) {
-      Alert.alert('Validation', "Passwords don't match.");
+      setErrorMsg("Passwords don't match.");
       return;
     }
     if (!agree) {
-      Alert.alert('Terms', 'You must agree to the Terms & Privacy.');
+      setErrorMsg('You must agree to the Terms & Privacy.');
       return;
     }
 
@@ -57,17 +65,33 @@ export default function SignupScreen() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || 'Signup failed');
       Alert.alert('Success', 'Account created.');
-
-    // Navigate to Home page
-    router.push("/home");
-      // optionally navigate to Sign in screen or clear fields
+      // Log in the user immediately after signup to get JWT and correct profile
+      const loginRes = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const loginData = await loginRes.json();
+      if (loginData.token) {
+        await AsyncStorage.setItem('jwtToken', loginData.token);
+        // Fetch user profile with token
+        const profileRes = await fetch(`${API_URL}/api/auth/profile`, {
+          headers: { 'Authorization': `Bearer ${loginData.token}` }
+        });
+        const profile = await profileRes.json();
+        if (profile.fullName && profile.parish && profile.email) {
+          await AsyncStorage.setItem('userProfile', JSON.stringify({ fullName: profile.fullName, parish: profile.parish, email: profile.email }));
+        }
+      }
+      router.push("/home");
       setFullName(''); setParish(''); setEmail(''); setPassword(''); setRetype(''); setAgree(false);
+      setErrorMsg('');
     } catch (err) {
       if (err instanceof Error) {
-    Alert.alert('Error', err.message);
-  } else {
-    Alert.alert('Error', String(err));
-  }
+        setErrorMsg(err.message);
+      } else {
+        setErrorMsg(String(err));
+      }
     } finally {
       setLoading(false);
     }
@@ -91,7 +115,15 @@ export default function SignupScreen() {
               placeholder="Full Name"
               placeholderTextColor="#96a0b4"
               value={fullName}
-              onChangeText={setFullName}
+              onChangeText={text => {
+                if (text.length <= 20) {
+                  setFullName(text);
+                  if (errorMsg === 'Full name cannot be more than 20 characters.') setErrorMsg('');
+                } else {
+                  setErrorMsg('Full name cannot be more than 20 characters.');
+                }
+              }}
+              maxLength={20}
               style={styles.input}
               autoCapitalize="words"
               returnKeyType="next"
@@ -164,6 +196,7 @@ export default function SignupScreen() {
             <TouchableOpacity><Text style={[styles.tinyText, styles.linkText]}>Terms & Privacy</Text></TouchableOpacity>
           </TouchableOpacity>
 
+
           <TouchableOpacity
             style={[styles.signBtn, loading && {opacity:0.7}]}
             onPress={onSignUp}
@@ -171,6 +204,10 @@ export default function SignupScreen() {
           >
             <Text style={styles.signBtnText}>{loading ? 'Signing up...' : 'Sign Up'}</Text>
           </TouchableOpacity>
+
+          {errorMsg ? (
+            <Text style={{ color: 'red', marginTop: 8, textAlign: 'center', fontSize: 13 }}>{errorMsg}</Text>
+          ) : null}
 
           <View style={{flexDirection:'row', justifyContent:'center', marginTop:12}}>
             <Text style={styles.smallGrey}>Have an account?</Text>
