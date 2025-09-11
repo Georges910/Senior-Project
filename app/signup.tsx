@@ -63,7 +63,19 @@ export default function SignupScreen() {
         body: JSON.stringify({ fullName, parish, email, password }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || 'Signup failed');
+      if (!res.ok) {
+        if (data?.error === 'Email already registered') {
+          setErrorMsg('This email is already in use.');
+          setLoading(false);
+          return;
+        }
+        if (data?.error === 'Username already taken') {
+          setErrorMsg('This username is already taken.');
+          setLoading(false);
+          return;
+        }
+        throw new Error(data.message || 'Signup failed');
+      }
       Alert.alert('Success', 'Account created.');
       // Log in the user immediately after signup to get JWT and correct profile
       const loginRes = await fetch(`${API_URL}/api/auth/login`, {

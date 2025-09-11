@@ -28,5 +28,11 @@ process.on('SIGINT', async () => {
   process.exit(0);
 });
 
+// Catch-all error handler to always return JSON
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
+});
+
 // Start server
 app.listen(3000, "0.0.0.0", () => console.log('🚀 Server running on port 3000'));

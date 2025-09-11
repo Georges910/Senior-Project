@@ -1,3 +1,20 @@
+const express = require('express');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const User = require('../models/User');
+const AdminCredential = require('../models/AdminCredential');
+
+const router = express.Router();
+
+// Admin: Get all users
+router.get('/admin/users', async (req, res) => {
+  try {
+    const users = await User.find({}, 'fullName parish email');
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
 // JWT authentication middleware
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -9,12 +26,36 @@ function authenticateToken(req, res, next) {
     next();
   });
 }
-const express = require('express');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
 
-const router = express.Router();
+// Add Admin to ekklisia.admincredentials
+router.post('/add-admin', async (req, res) => {
+  try {
+    const { fullName, password, church } = req.body;
+    if (!fullName || !password || !church) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+    // Check if admin with same name and church exists
+    const existing = await AdminCredential.findOne({ fullName, church });
+    if (existing) {
+      return res.status(400).json({ error: 'Admin already exists for this church' });
+    }
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newAdmin = new AdminCredential({
+      fullName,
+      password: hashedPassword,
+      church
+    });
+  await newAdmin.save();
+  console.log(`Admin added: ${fullName} (${church})`);
+  return res.json({ message: 'Admin added successfully' });
+  } catch (err) {
+    console.error('Add admin error:', err);
+    // Always return JSON, even on error
+    return res.status(500).json({ error: 'Failed to add admin', details: err?.message || err });
+  }
+});
+
+
 
 // Register
 router.post('/register', async (req, res) => {
@@ -25,9 +66,16 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
+    // Check for duplicate email
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ error: 'Email already registered' });
+    }
+
+    // Check for duplicate username (fullName)
+    const existingName = await User.findOne({ fullName });
+    if (existingName) {
+      return res.status(400).json({ error: 'Username already taken' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -13,69 +13,64 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = "http://localhost:3000"
+const API_URL = "http://localhost:3000";
 
-export default function Login() {
+
+export default function AdminLogin() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [users, setUsers] = useState<any[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      setUsersLoading(true);
+      try {
+        const res = await fetch(`${API_URL}/api/auth/admin/users`);
+        const data = await res.json();
+        if (Array.isArray(data)) setUsers(data);
+      } catch (err) {
+        // Optionally handle error
+      } finally {
+        setUsersLoading(false);
+      }
+    };
+    fetchUsers();
+  }, []);
 
   const onLogin = async () => {
-  console.log("Login button pressed"); 
-
-  if (!email || !password) {
-    Alert.alert("Validation", "Please fill in both fields.");
-    return;
-  }
-  setLoading(true);
-
-  try {
-    setErrorMsg('');
-    const res = await fetch(`${API_URL}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email, password }),
-    });
-
-    console.log("Response status:", res.status);
-    const data = await res.json();
-    console.log("Response body:", data);
-
-    if (!res.ok) {
-      setErrorMsg(data.error || "Login failed");
+    if (!email || !password) {
+      setErrorMsg("Please fill in both fields.");
       return;
     }
-
-    // Save JWT token
-    if (data.token) {
-      await AsyncStorage.setItem('jwtToken', data.token);
-    }
-    // Fetch user profile after successful login with token
-  let profile: any = {};
-    if (data.token) {
-      const profileRes = await fetch(`${API_URL}/api/auth/profile`, {
-        headers: { 'Authorization': `Bearer ${data.token}` }
+    setLoading(true);
+    setErrorMsg("");
+    try {
+      // Replace with your admin login endpoint if different
+      const res = await fetch(`${API_URL}/api/auth/admin-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
-      profile = await profileRes.json();
-      if (profile.fullName && profile.parish && profile.email) {
-        await AsyncStorage.setItem('userProfile', JSON.stringify({ fullName: profile.fullName, parish: profile.parish, email: profile.email }));
+      const data = await res.json();
+      if (!res.ok) {
+        setErrorMsg(data.error || "Login failed");
+        return;
       }
+      Alert.alert("Success", "Admin login successful");
+      setErrorMsg("");
+      //router.replace("/admin-dashboard"); // Change to your admin dashboard route
+    } catch (err) {
+      setErrorMsg("Could not connect to server");
+    } finally {
+      setLoading(false);
     }
-  Alert.alert("Success", "Login successful");
-  setErrorMsg('');
-  router.replace("/home");
-  } catch (err) {
-    console.error("Login error:", err);
-  setErrorMsg("Could not connect to server");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <KeyboardAvoidingView
@@ -83,11 +78,12 @@ export default function Login() {
       style={{ flex: 1, backgroundColor: "#0b2b52" }}
     >
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.push('/admin')}>
-            <Text style={styles.adminText}>Are You Church Admin?</Text>
-          </TouchableOpacity>
+          <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'flex-start' }}>
+            <TouchableOpacity onPress={() => router.replace('/login')}>
+              <Text style={styles.adminText}>Login</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.illustrationWrap}>
             <View style={styles.circle}>
               <Image
@@ -98,12 +94,17 @@ export default function Login() {
               />
             </View>
           </View>
-          <Text style={styles.appTitle}>Ekklesia</Text>
+          <Text style={styles.appTitle}>Ekklesia Admin</Text>
         </View>
 
-        {/* White sheet */}
+  {/* Users List removed as requested */}
         <View style={styles.sheet}>
-          {/* Email */}
+          <TouchableOpacity
+            style={[styles.loginBtn, { marginBottom: 10, backgroundColor: '#F4C430' }]}
+            onPress={() => router.push('/mainadmins')}
+          >
+            <Text style={[styles.loginText, { color: '#0b2b52' }]}>Add Admin</Text>
+          </TouchableOpacity>
           <View style={styles.inputRow}>
             <Ionicons
               name="person-outline"
@@ -112,7 +113,7 @@ export default function Login() {
               style={styles.leftIcon}
             />
             <TextInput
-              placeholder="Email or Phone"
+              placeholder="Admin Email"
               placeholderTextColor="#96a0b4"
               value={email}
               onChangeText={setEmail}
@@ -121,7 +122,6 @@ export default function Login() {
               autoCapitalize="none"
             />
           </View>
-
           <View style={styles.inputRow}>
             <Ionicons
               name="lock-closed-outline"
@@ -145,13 +145,6 @@ export default function Login() {
               />
             </TouchableOpacity>
           </View>
-
-          {/* Forgot password */}
-          <TouchableOpacity style={{ alignSelf: "center", marginTop: 10 }}>
-            <Text style={styles.forgot}>Forgot Password?</Text>
-          </TouchableOpacity>
-
-          {/* Login */}
           <TouchableOpacity
             style={[styles.loginBtn, loading && { opacity: 0.7 }]}
             onPress={onLogin}
@@ -161,21 +154,9 @@ export default function Login() {
               {loading ? "Logging in..." : "Login"}
             </Text>
           </TouchableOpacity>
-
-          {/* Error message under login button */}
           {errorMsg ? (
             <Text style={{ color: 'red', marginTop: 8, textAlign: 'center', fontSize: 13 }}>{errorMsg}</Text>
           ) : null}
-
-          <Text style={styles.or}>or</Text>
-
-          {/* Create account */}
-          <TouchableOpacity
-            style={styles.createBtn}
-            onPress={() => router.push("/signup")}
-          >
-            <Text style={styles.createText}>Create an account</Text>
-          </TouchableOpacity>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -191,9 +172,10 @@ const styles = StyleSheet.create({
   },
   adminText: {
     color: "#c6d3e6",
-    fontSize: 12,
+    fontSize: 16,
     alignSelf: "flex-start",
     marginBottom: 6,
+    fontWeight: 'bold',
   },
   illustrationWrap: { alignItems: "center", marginTop: 8 },
   circle: {
@@ -236,7 +218,6 @@ const styles = StyleSheet.create({
   },
   leftIcon: { marginRight: 8 },
   input: { flex: 1, fontSize: 15, color: "#222" },
-  forgot: { fontSize: 12, color: "#6d7486" },
   loginBtn: {
     width: "86%",
     marginTop: 18,
@@ -248,16 +229,4 @@ const styles = StyleSheet.create({
     borderColor: "#e7ecf6",
   },
   loginText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  or: { marginTop: 14, color: "#9aa1b6" },
-  createBtn: {
-    width: "86%",
-    marginTop: 10,
-    backgroundColor: "#fff",
-    paddingVertical: 14,
-    borderRadius: 24,
-    alignItems: "center",
-    borderWidth: 1.4,
-    borderColor: "#4b5a79",
-  },
-  createText: { color: "#0b2b52", fontWeight: "700", fontSize: 16 },
 });
