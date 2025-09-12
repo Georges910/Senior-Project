@@ -7,7 +7,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = "http://192.168.10.249:3000";
+const API_URL = "http://localhost:3000";
 
 
 
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   },
   smallTop: { color:'#e6eef7', fontSize: 16, marginBottom: 6 },
   title: { color:'#fff', fontSize: 36, fontWeight: '700', lineHeight: 40 },
-  form: { width: '86%', marginTop: -22 },
+  form: { width: '86%', marginTop: 22 },
   inputWrap: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -79,32 +79,25 @@ export default function AdminLogin() {
     >
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         <View style={styles.header}>
-          <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'flex-start' }}>
-            <TouchableOpacity onPress={() => router.replace('/login')}>
-              <Text style={styles.adminText}>Login</Text>
+          <View style={styles.adminWrap}>
+            <TouchableOpacity onPress={() => router.push('/login')}>
+              <Text style={styles.adminText}>Return To User Login</Text>
             </TouchableOpacity>
           </View>
+
           <View style={styles.illustrationWrap}>
-            <View style={styles.circle}>
-              <Image
-                source={{
-                  uri: "https://raw.githubusercontent.com/midwire/assets/main/church-flat.png",
-                }}
-                style={{ width: 140, height: 140, resizeMode: "contain" }}
-              />
-            </View>
+            <Image
+              source={require("../Images/Logo.png")}
+              style={{ width: 180, height: 180, resizeMode: "contain" }}
+            />
           </View>
-          <Text style={styles.appTitle}>Ekklesia Admin</Text>
+
+          <Text style={styles.appTitle}>Ekklesia</Text>
+          <Text style={styles.subtitleText}>Church Admin</Text>
         </View>
 
-  {/* Users List removed as requested */}
+        {/* Users List removed as requested */}
         <View style={styles.sheet}>
-          <TouchableOpacity
-            style={[styles.loginBtn, { marginBottom: 10, backgroundColor: '#F4C430' }]}
-            onPress={() => router.push('/mainadmins')}
-          >
-            <Text style={[styles.loginText, { color: '#0b2b52' }]}>Add Admin</Text>
-          </TouchableOpacity>
           <View style={styles.inputRow}>
             <Ionicons
               name="person-outline"
@@ -168,14 +161,22 @@ const styles = StyleSheet.create({
     paddingTop: 28,
     paddingHorizontal: 22,
     backgroundColor: "#0b2b52",
-    alignItems: "center",
+    alignItems: "center",  // keeps logo + title centered
   },
+
+  adminWrap: {
+    alignSelf: "flex-start",  // push admin text to the left
+  },
+
   adminText: {
     color: "#c6d3e6",
-    fontSize: 16,
-    alignSelf: "flex-start",
+    fontSize: 12,
+    textAlign: "left",
     marginBottom: 6,
-    fontWeight: 'bold',
+  },
+  subtitleText: {
+    color: "#c6d3e6",
+    fontSize: 18,
   },
   illustrationWrap: { alignItems: "center", marginTop: 8 },
   circle: {
@@ -191,8 +192,8 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: "800",
     color: "#F4C430",
-    letterSpacing: 0.3,
-    marginBottom: 20,
+    letterSpacing: 3,
+    marginBottom: 5,
   },
   sheet: {
     flexGrow: 1,

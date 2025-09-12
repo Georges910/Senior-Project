@@ -35,15 +35,17 @@ const HomeScreen: React.FC = () => {
   const [verse, setVerse] = useState<VerseOfDay | null>(null);
   const [prayers, setPrayers] = useState<PrayerItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
+  
+  // Active page state for bottom nav
+  const [activePage, setActivePage] = useState('Home');
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      // Always fetch user profile from server using JWT token
       let u = null;
       const token = await AsyncStorage.getItem('jwtToken');
       if (token) {
-        const API_URL = 'http://localhost:3000'; // or your actual API URL
+        const API_URL = 'http://localhost:3000'; // your API URL
         const profileRes = await fetch(`${API_URL}/api/auth/profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -51,7 +53,6 @@ const HomeScreen: React.FC = () => {
           u = await profileRes.json();
         }
       }
-      // You can still fetch other data as before
       const [v, p, e] = await Promise.all([
         Api.getVerseOfDay(),
         Api.getPrayerScheduleForSelectedChurch(),
@@ -68,7 +69,6 @@ const HomeScreen: React.FC = () => {
 
   const router = useRouter();
   const handleLogout = async () => {
-    // Clear user credentials from AsyncStorage
     await AsyncStorage.removeItem('userProfile');
     await AsyncStorage.removeItem('jwtToken');
     router.replace('/login');
@@ -96,7 +96,7 @@ const HomeScreen: React.FC = () => {
               <Text style={styles.nameText}>{user?.fullName || 'Full Name'}</Text>
               <View style={[styles.parishRow, isRTL && styles.rowRTL]}>
                 <MaterialCommunityIcons name="map-marker" size={14} />
-                <Text style={styles.parishText}>{user?.parish || 'Parish Location'}</Text>
+                <Text style={styles.parishText}>{user?.parish || 'Parish'}</Text>
               </View>
             </View>
           </View>
@@ -155,10 +155,13 @@ const HomeScreen: React.FC = () => {
 
       {/* Bottom Navigation */}
       <BottomNav
-        active="Home"
+        active={activePage}
         onNavigate={(page) => {
+          setActivePage(page);
           if (page === 'Home') return;
           navigation.navigate(page);
+          if (page === "FindChurch") router.push("/FindChurchScreen");
+          if (page === "Books") router.push("/BooksScreen");
         }}
       />
     </SafeAreaView>
@@ -216,7 +219,6 @@ const BottomNav: React.FC<{ active: string; onNavigate: (page: string) => void }
     { name: 'Home', icon: 'home' },
     { name: 'FindChurch', icon: 'search' },
     { name: 'Books', icon: 'book' },
-    { name: 'Profile', icon: 'person' },
   ];
 
   return (
@@ -231,7 +233,9 @@ const BottomNav: React.FC<{ active: string; onNavigate: (page: string) => void }
           ]}
         >
           <Ionicons name={b.icon as any} size={24} color={active === b.name ? '#fff' : '#173B65'} />
-          <Text style={[bottomNavStyles.label, active === b.name && { color: '#fff' }]}>{b.name}</Text>
+          <Text style={[bottomNavStyles.label, active === b.name && bottomNavStyles.activeLabel]}>
+            {b.name}
+          </Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -281,13 +285,14 @@ const styles = StyleSheet.create({
 });
 
 const bottomNavStyles = StyleSheet.create({
-  container: { 
+  container: {
     position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', justifyContent: 'space-between',
     backgroundColor: '#fff', width: '70%', borderRadius: 40, padding: 8, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 5
   },
   button: { flex: 1, alignItems: 'center', paddingVertical: 6 },
   activeButton: { backgroundColor: '#173B65', borderRadius: 30 },
   label: { fontSize: 11, fontWeight: '600', color: '#173B65', marginTop: 2 },
+  activeLabel: { color: '#fff' },
 });
 
 // ---------- Placeholder ----------
@@ -298,10 +303,6 @@ const Placeholder = {
 
 // ---------- Api service ----------
 const Api = {
-  async getUserProfile(): Promise<UserProfile> { // Replace with real API return 
-  return { fullName: 'Full Name', parish: 'Parish Location', avatarUrl: Placeholder.avatar }; },
-  
-  
   async getVerseOfDay(): Promise<VerseOfDay> {
     return { id: 'v1', imageUrl: Placeholder.banner, verseText: '"لأن الرب سامع للمساكين ولا يحتقر أسراه"', reference: 'المزامير 69:33 (العربية)' };
   },

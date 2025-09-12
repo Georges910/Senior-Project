@@ -1,20 +1,277 @@
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+  Image,
+  FlatList,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from '@react-navigation/native';
+import { useRouter } from 'expo-router';
 
 const FindChurchScreen = () => {
+  const [search, setSearch] = useState("");
+  const navigation = useNavigation<any>();
+  const router = useRouter();
+  
+  // Set "FindChurch" as active
+  const [activePage, setActivePage] = useState("FindChurch");
+
+  const churches = [
+    { id: "1", name: "Church", location: "Location", about: "About" },
+    { id: "2", name: "Church", location: "Location", about: "About" },
+    { id: "3", name: "Church", location: "Location", about: "About" },
+    { id: "4", name: "Church", location: "Location", about: "About" },
+    { id: "5", name: "Church", location: "Location", about: "About" },
+    { id: "6", name: "Church", location: "Location", about: "About" },
+  ];
+
+  const renderChurchCard = ({ item }: any) => (
+    <View style={styles.card}>
+      <Image
+        source={{
+          uri: "https://raw.githubusercontent.com/midwire/assets/main/church-flat.png",
+        }}
+        style={styles.cardImage}
+      />
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle}>{item.name}</Text>
+        <Text style={styles.cardLocation}>
+          <Ionicons name="location-outline" size={14} /> {item.location}
+        </Text>
+        <Text style={styles.cardAbout}>{item.about}</Text>
+
+        <View style={styles.cardActions}>
+          <TouchableOpacity style={styles.detailButton}>
+            <Text style={styles.detailButtonText}>See Detail</Text>
+          </TouchableOpacity>
+          <View style={styles.iconsRow}>
+            <Ionicons name="logo-facebook" size={18} color="#173B65" />
+            <Ionicons name="call-outline" size={18} color="#173B65" />
+            <Ionicons name="mail-outline" size={18} color="#173B65" />
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
-      <Text>Hello World - FindChurchScreen</Text>
+      {/* Header */}
+      <Text style={styles.header}>Find a church</Text>
+
+      {/* Search bar */}
+      <View style={styles.searchBar}>
+        <Ionicons name="search-outline" size={20} color="#fff" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Find a church"
+          placeholderTextColor="#fff"
+          value={search}
+          onChangeText={setSearch}
+        />
+      </View>
+
+      {/* Churches list */}
+      <FlatList
+        data={churches}
+        keyExtractor={(item) => item.id}
+        renderItem={renderChurchCard}
+        contentContainerStyle={{ paddingBottom: 90 }}
+      />
+
+      {/* Bottom Nav */}
+      <View style={styles.bottomNav}>
+        <BottomNav
+          active={activePage}
+          onNavigate={(page) => {
+            setActivePage(page); // update active page dynamically
+            if (page === 'Home') router.push("/home");
+            if (page === "FindChurch") return;
+            if (page === "Books") router.push("/BooksScreen");
+            navigation.navigate(page);
+          }}
+        />
+      </View>
     </View>
   );
 };
 
 export default FindChurchScreen;
 
+// ---------- Bottom Navigation ----------
+const BottomNav: React.FC<{ active: string; onNavigate: (page: string) => void }> = ({ active, onNavigate }) => {
+  const buttons = [
+    { name: 'Home', icon: 'home' },
+    { name: 'FindChurch', icon: 'search' },
+    { name: 'Books', icon: 'book' },
+    //{ name: 'Profile', icon: 'person' },
+  ];
+
+  return (
+    <View style={bottomNavStyles.container}>
+      {buttons.map((b) => (
+        <TouchableOpacity
+          key={b.name}
+          onPress={() => onNavigate(b.name)}
+          style={[
+            bottomNavStyles.button,
+            active === b.name && bottomNavStyles.activeButton,
+          ]}
+        >
+          <Ionicons
+            name={b.icon as any}
+            size={24}
+            color={active === b.name ? '#fff' : '#173B65'}
+          />
+          <Text style={[bottomNavStyles.label, active === b.name && bottomNavStyles.activeLabel]}>
+            {b.name}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+};
+
+// ---------- Styles ----------
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
+    backgroundColor: "#f5f6fa",
+    paddingHorizontal: 12,
+  },
+  header: {
+    fontSize: 20,
+    fontWeight: "bold",
+    textAlign: "center",
+    marginVertical: 16,
+    color: "#173B65",
+  },
+  searchBar: {
+    flexDirection: "row",
     alignItems: "center",
+    backgroundColor: "#173B65",
+    borderRadius: 25,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  searchInput: {
+    flex: 1,
+    color: "#fff",
+    marginLeft: 8,
+  },
+  card: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    marginBottom: 14,
+    overflow: "hidden",
+    elevation: 2,
+  },
+  cardImage: {
+    width: 100,
+    height: 100,
+    borderTopLeftRadius: 12,
+    borderBottomLeftRadius: 12,
+  },
+  cardContent: {
+    flex: 1,
+    padding: 10,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+  },
+  cardLocation: {
+    fontSize: 12,
+    color: "#555",
+    marginTop: 2,
+  },
+  cardAbout: {
+    fontSize: 12,
+    color: "#777",
+    marginVertical: 4,
+  },
+  cardActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  detailButton: {
+    backgroundColor: "#173B65",
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  detailButtonText: {
+    color: "#fff",
+    fontSize: 12,
+  },
+  iconsRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  bottomNav: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    backgroundColor: "#e6ebf2",
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderColor: "#ccc",
+  },
+});
+
+const bottomNavStyles = StyleSheet.create({
+  container: {
+    position: 'absolute',
+    bottom: 16,
+    alignSelf: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    width: '70%',
+    borderRadius: 40,
+    padding: 8,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+  },
+  button: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderRadius: 30,
+  },
+  activeButton: {
+    backgroundColor: '#173B65',
+    borderRadius: 30,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    shadowColor: '#173B65',
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+    transform: [{ scale: 1.05 }],
+  },
+  label: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#173B65',
+    marginTop: 2,
+  },
+  activeLabel: {
+    color: '#fff',
   },
 });

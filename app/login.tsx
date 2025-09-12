@@ -26,56 +26,56 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
 
   const onLogin = async () => {
-  console.log("Login button pressed"); 
+    console.log("Login button pressed");
 
-  if (!email || !password) {
-    Alert.alert("Validation", "Please fill in both fields.");
-    return;
-  }
-  setLoading(true);
-
-  try {
-    setErrorMsg('');
-    const res = await fetch(`${API_URL}/api/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: email, password }),
-    });
-
-    console.log("Response status:", res.status);
-    const data = await res.json();
-    console.log("Response body:", data);
-
-    if (!res.ok) {
-      setErrorMsg(data.error || "Login failed");
+    if (!email || !password) {
+      Alert.alert("Validation", "Please fill in both fields.");
       return;
     }
+    setLoading(true);
 
-    // Save JWT token
-    if (data.token) {
-      await AsyncStorage.setItem('jwtToken', data.token);
-    }
-    // Fetch user profile after successful login with token
-  let profile: any = {};
-    if (data.token) {
-      const profileRes = await fetch(`${API_URL}/api/auth/profile`, {
-        headers: { 'Authorization': `Bearer ${data.token}` }
+    try {
+      setErrorMsg('');
+      const res = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email, password }),
       });
-      profile = await profileRes.json();
-      if (profile.fullName && profile.parish && profile.email) {
-        await AsyncStorage.setItem('userProfile', JSON.stringify({ fullName: profile.fullName, parish: profile.parish, email: profile.email }));
+
+      console.log("Response status:", res.status);
+      const data = await res.json();
+      console.log("Response body:", data);
+
+      if (!res.ok) {
+        setErrorMsg(data.error || "Login failed");
+        return;
       }
+
+      // Save JWT token
+      if (data.token) {
+        await AsyncStorage.setItem('jwtToken', data.token);
+      }
+      // Fetch user profile after successful login with token
+      let profile: any = {};
+      if (data.token) {
+        const profileRes = await fetch(`${API_URL}/api/auth/profile`, {
+          headers: { 'Authorization': `Bearer ${data.token}` }
+        });
+        profile = await profileRes.json();
+        if (profile.fullName && profile.parish && profile.email) {
+          await AsyncStorage.setItem('userProfile', JSON.stringify({ fullName: profile.fullName, parish: profile.parish, email: profile.email }));
+        }
+      }
+      Alert.alert("Success", "Login successful");
+      setErrorMsg('');
+      router.replace("/home");
+    } catch (err) {
+      console.error("Login error:", err);
+      setErrorMsg("Could not connect to server");
+    } finally {
+      setLoading(false);
     }
-  Alert.alert("Success", "Login successful");
-  setErrorMsg('');
-  router.replace("/home");
-  } catch (err) {
-    console.error("Login error:", err);
-  setErrorMsg("Could not connect to server");
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <KeyboardAvoidingView
@@ -85,21 +85,22 @@ export default function Login() {
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.push('/admin')}>
-            <Text style={styles.adminText}>Are You Church Admin?</Text>
-          </TouchableOpacity>
-          <View style={styles.illustrationWrap}>
-            <View style={styles.circle}>
-              <Image
-                source={{
-                  uri: "https://raw.githubusercontent.com/midwire/assets/main/church-flat.png",
-                }}
-                style={{ width: 140, height: 140, resizeMode: "contain" }}
-              />
-            </View>
+          <View style={styles.adminWrap}>
+            <TouchableOpacity onPress={() => router.push('/admin')}>
+              <Text style={styles.adminText}>Are You Church Admin?</Text>
+            </TouchableOpacity>
           </View>
+
+          <View style={styles.illustrationWrap}>
+            <Image
+              source={require("../Images/Logo.png")}
+              style={{ width: 180, height: 180, resizeMode: "contain" }}
+            />
+          </View>
+
           <Text style={styles.appTitle}>Ekklesia</Text>
         </View>
+
 
         {/* White sheet */}
         <View style={styles.sheet}>
@@ -187,12 +188,17 @@ const styles = StyleSheet.create({
     paddingTop: 28,
     paddingHorizontal: 22,
     backgroundColor: "#0b2b52",
-    alignItems: "center",
+    alignItems: "center",  // keeps logo + title centered
   },
+
+  adminWrap: {
+    alignSelf: "flex-start",  // push admin text to the left
+  },
+
   adminText: {
     color: "#c6d3e6",
     fontSize: 12,
-    alignSelf: "flex-start",
+    textAlign: "left",
     marginBottom: 6,
   },
   illustrationWrap: { alignItems: "center", marginTop: 8 },
@@ -209,7 +215,7 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontWeight: "800",
     color: "#F4C430",
-    letterSpacing: 0.3,
+    letterSpacing: 3,
     marginBottom: 20,
   },
   sheet: {
