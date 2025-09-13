@@ -11,6 +11,7 @@ import {
   I18nManager,
   RefreshControl,
   FlatList,
+  Dimensions,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -18,10 +19,12 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
 // ---------- Types ----------
 export type PrayerItem = { id: string; time: string; titleAr: string };
 export type EventItem = { id: string; title: string; parish: string; dateLabel: string; imageUrl: string };
-export type VerseOfDay = { id: string; imageUrl: string; verseText: string; reference: string };
+export type VerseOfDay = { id: string; imageUrl: string; };
 export type UserProfile = { fullName: string; parish: string; email?: string; avatarUrl?: string };
 
 // ---------- HomeScreen ----------
@@ -35,7 +38,7 @@ const HomeScreen: React.FC = () => {
   const [verse, setVerse] = useState<VerseOfDay | null>(null);
   const [prayers, setPrayers] = useState<PrayerItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
-  
+
   // Active page state for bottom nav
   const [activePage, setActivePage] = useState('Home');
 
@@ -111,15 +114,12 @@ const HomeScreen: React.FC = () => {
         {/* Verse Banner */}
         <View style={styles.bannerCard}>
           <ImageBackground
-            source={{ uri: verse?.imageUrl || Placeholder.banner }}
+            source={{ uri: verse?.imageUrl }}
             style={styles.bannerImage}
             imageStyle={styles.bannerImageRadius}
-          >
+            resizeMode="cover"
+            >
             <LinearGradient colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.35)']} style={styles.bannerGradient} />
-            <View style={[styles.bannerTextWrap, isRTL && styles.alignRight]}>
-              <Text style={styles.bannerVerse} numberOfLines={2}>{verse?.verseText || '"لأن الرب سامع للمساكين ولا يحتقر أسراه"'}</Text>
-              <Text style={styles.bannerRef}>{verse?.reference || 'المزامير 69:33 (العربية)'}</Text>
-            </View>
           </ImageBackground>
         </View>
 
@@ -259,7 +259,12 @@ const styles = StyleSheet.create({
   notifBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.card, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   iconButton: { marginLeft: 15 },
   bannerCard: { paddingHorizontal: 16, paddingVertical: 8 },
-  bannerImage: { height: 110, borderRadius: 14, overflow: 'hidden' },
+  bannerImage: {
+    width: '100%',
+    height: SCREEN_WIDTH * 0.35, // 35% of screen width
+    borderRadius: 14,
+  },
+
   bannerImageRadius: { borderRadius: 14 },
   bannerGradient: { ...StyleSheet.absoluteFillObject },
   bannerTextWrap: { position: 'absolute', bottom: 10, left: 14, right: 14 },
@@ -276,8 +281,17 @@ const styles = StyleSheet.create({
   prayerTime: { fontSize: 12, color: COLORS.textDark, fontWeight: '600' },
   prayerTitle: { fontSize: 12, color: COLORS.textDark },
   skeletonRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 15, backgroundColor: '#f0f0f0', borderRadius: 8, marginBottom: 10 },
-  eventCard: { width: 260, marginRight: 12, backgroundColor: COLORS.card, borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 3 },
-  eventImage: { width: '100%', height: 110 },
+  eventCard: {
+    width: SCREEN_WIDTH * 0.8, // 70% of screen width
+    marginRight: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  eventImage: {
+    width: '100%',
+    height: SCREEN_WIDTH * 0.4, // 40% of screen width
+  },
+
   eventContent: { padding: 12, gap: 6 },
   eventTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textDark },
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -304,8 +318,11 @@ const Placeholder = {
 // ---------- Api service ----------
 const Api = {
   async getVerseOfDay(): Promise<VerseOfDay> {
-    return { id: 'v1', imageUrl: Placeholder.banner, verseText: '"لأن الرب سامع للمساكين ولا يحتقر أسراه"', reference: 'المزامير 69:33 (العربية)' };
+    const day = new Date().getDate(); // 1-31
+    const index = day % verseImages.length; // rotate over 10 banners
+    return verseImages[index];
   },
+
   async getPrayerScheduleForSelectedChurch(): Promise<PrayerItem[]> {
     return [
       { id: 'p1', time: '8:09 AM', titleAr: 'صلاة السحر' },
@@ -324,3 +341,49 @@ const Api = {
     return d.toLocaleDateString(undefined, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
   },
 };
+
+//Store the claudinary URL
+
+const verseImages = [
+  {
+    id: 'v1',
+    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757760343/Ekklesia/Banner/10_zxz8rk.png',
+  },
+  {
+    id: 'v2',
+    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757760317/Ekklesia/Banner/3_a1lxfx.png',
+  },
+  {
+    id: 'v3',
+    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757760317/Ekklesia/Banner/1_oaglss.png',
+  },
+  {
+    id: 'v4',
+    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757759184/Ekklesia/Banner/9_y9zi2y.png',
+  },
+  {
+    id: 'v5',
+    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758899/Ekklesia/Banner/2_me5wne.png',
+  },
+  {
+    id: 'v6',
+    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758874/Ekklesia/Banner/5_bahbqo.png',
+  },
+  {
+    id: 'v7',
+    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758873/Ekklesia/Banner/8_oqdhwx.png',
+  },
+  {
+    id: 'v8',
+    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758867/Ekklesia/Banner/7_u5k81e.png',
+  },
+  {
+    id: 'v9',
+    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758837/Ekklesia/Banner/6_pyjuea.png',
+  },
+  {
+    id: 'v10',
+    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758837/Ekklesia/Banner/4_uyvb8j.png',
+  },
+];
+
