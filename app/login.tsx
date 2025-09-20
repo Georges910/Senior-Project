@@ -15,14 +15,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = "http://localhost:3000"
+//const API_URL = "http://10.163.217.128:3000"
+const API_URL = "http://localhost:3000"; 
 
 export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorMsg, setErrorMsg] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
   const onLogin = async () => {
@@ -35,7 +36,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      setErrorMsg('');
+      setErrorMsg("");
       const res = await fetch(`${API_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -53,21 +54,30 @@ export default function Login() {
 
       // Save JWT token
       if (data.token) {
-        await AsyncStorage.setItem('jwtToken', data.token);
+        await AsyncStorage.setItem("jwtToken", data.token);
       }
+
       // Fetch user profile after successful login with token
       let profile: any = {};
       if (data.token) {
         const profileRes = await fetch(`${API_URL}/api/auth/profile`, {
-          headers: { 'Authorization': `Bearer ${data.token}` }
+          headers: { Authorization: `Bearer ${data.token}` },
         });
         profile = await profileRes.json();
         if (profile.fullName && profile.parish && profile.email) {
-          await AsyncStorage.setItem('userProfile', JSON.stringify({ fullName: profile.fullName, parish: profile.parish, email: profile.email }));
+          await AsyncStorage.setItem(
+            "userProfile",
+            JSON.stringify({
+              fullName: profile.fullName,
+              parish: profile.parish,
+              email: profile.email,
+            })
+          );
         }
       }
+
       Alert.alert("Success", "Login successful");
-      setErrorMsg('');
+      setErrorMsg("");
       router.replace("/home");
     } catch (err) {
       console.error("Login error:", err);
@@ -86,7 +96,7 @@ export default function Login() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.adminWrap}>
-            <TouchableOpacity onPress={() => router.push('/admin')}>
+            <TouchableOpacity onPress={() => router.push("/admin")}>
               <Text style={styles.adminText}>Are You Church Admin?</Text>
             </TouchableOpacity>
           </View>
@@ -94,13 +104,13 @@ export default function Login() {
           <View style={styles.illustrationWrap}>
             <Image
               source={require("../Images/Logo.png")}
-              style={{ width: 180, height: 180, resizeMode: "contain" }}
+              style={{ width: 180, height: 180 }}
+              resizeMode="contain"
             />
           </View>
 
           <Text style={styles.appTitle}>Ekklesia</Text>
         </View>
-
 
         {/* White sheet */}
         <View style={styles.sheet}>
@@ -123,6 +133,7 @@ export default function Login() {
             />
           </View>
 
+          {/* Password */}
           <View style={styles.inputRow}>
             <Ionicons
               name="lock-closed-outline"
@@ -142,7 +153,7 @@ export default function Login() {
               <Ionicons
                 name={showPassword ? "eye-off-outline" : "eye-outline"}
                 size={18}
-                color="#58617a"
+                color="#58617a" 
               />
             </TouchableOpacity>
           </View>
@@ -163,9 +174,18 @@ export default function Login() {
             </Text>
           </TouchableOpacity>
 
-          {/* Error message under login button */}
+          {/* Error message */}
           {errorMsg ? (
-            <Text style={{ color: 'red', marginTop: 8, textAlign: 'center', fontSize: 13 }}>{errorMsg}</Text>
+            <Text
+              style={{
+                color: "red",
+                marginTop: 8,
+                textAlign: "center",
+                fontSize: 13,
+              }}
+            >
+              {errorMsg}
+            </Text>
           ) : null}
 
           <Text style={styles.or}>or</Text>
@@ -188,13 +208,11 @@ const styles = StyleSheet.create({
     paddingTop: 28,
     paddingHorizontal: 22,
     backgroundColor: "#0b2b52",
-    alignItems: "center",  // keeps logo + title centered
+    alignItems: "center", // keeps logo + title centered
   },
-
   adminWrap: {
-    alignSelf: "flex-start",  // push admin text to the left
+    alignSelf: "flex-start", // push admin text to the left
   },
-
   adminText: {
     color: "#c6d3e6",
     fontSize: 12,
@@ -267,3 +285,4 @@ const styles = StyleSheet.create({
   },
   createText: { color: "#0b2b52", fontWeight: "700", fontSize: 16 },
 });
+

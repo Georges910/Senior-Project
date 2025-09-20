@@ -48,7 +48,8 @@ const HomeScreen: React.FC = () => {
       let u = null;
       const token = await AsyncStorage.getItem('jwtToken');
       if (token) {
-        const API_URL = 'http://localhost:3000'; // your API URL
+        //const API_URL = 'http://10.163.217.128:3000'; // your API URL
+        const API_URL = "http://localhost:3000"; 
         const profileRes = await fetch(`${API_URL}/api/auth/profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
