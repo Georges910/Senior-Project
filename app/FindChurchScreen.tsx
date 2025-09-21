@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -20,41 +20,29 @@ const FindChurchScreen = () => {
   // Set "FindChurch" as active
   const [activePage, setActivePage] = useState("FindChurch");
 
-  const churches = [
-    { id: "1", name: "Church", location: "Location", about: "About" },
-    { id: "2", name: "Church", location: "Location", about: "About" },
-    { id: "3", name: "Church", location: "Location", about: "About" },
-    { id: "4", name: "Church", location: "Location", about: "About" },
-    { id: "5", name: "Church", location: "Location", about: "About" },
-    { id: "6", name: "Church", location: "Location", about: "About" },
-  ];
+  const [churches, setChurches] = useState<Array<{ _id: string; name: string }>>([]);
+  useEffect(() => {
+    const fetchChurches = async () => {
+      try {
+        const res = await fetch('http://localhost:3000/api/church/ekklesia');
+        const data = await res.json();
+        if (Array.isArray(data.churches)) {
+          setChurches(data.churches.map((c: any) => ({ _id: c._id, name: c.name })));
+        } else {
+          setChurches([]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch churches:', err);
+      }
+    };
+    fetchChurches();
+  }, []);
+
+  const filteredChurches = churches.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
 
   const renderChurchCard = ({ item }: any) => (
     <View style={styles.card}>
-      <Image
-        source={{
-          uri: "https://raw.githubusercontent.com/midwire/assets/main/church-flat.png",
-        }}
-        style={styles.cardImage}
-      />
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{item.name}</Text>
-        <Text style={styles.cardLocation}>
-          <Ionicons name="location-outline" size={14} /> {item.location}
-        </Text>
-        <Text style={styles.cardAbout}>{item.about}</Text>
-
-        <View style={styles.cardActions}>
-          <TouchableOpacity style={styles.detailButton}>
-            <Text style={styles.detailButtonText}>See Detail</Text>
-          </TouchableOpacity>
-          <View style={styles.iconsRow}>
-            <Ionicons name="logo-facebook" size={18} color="#173B65" />
-            <Ionicons name="call-outline" size={18} color="#173B65" />
-            <Ionicons name="mail-outline" size={18} color="#173B65" />
-          </View>
-        </View>
-      </View>
+      <Text style={styles.cardTitle}>{item.name}</Text>
     </View>
   );
 
@@ -75,13 +63,20 @@ const FindChurchScreen = () => {
         />
       </View>
 
+
       {/* Churches list */}
-      <FlatList
-        data={churches}
-        keyExtractor={(item) => item.id}
-        renderItem={renderChurchCard}
-        contentContainerStyle={{ paddingBottom: 90 }}
-      />
+      {filteredChurches.length === 0 && search.trim() !== '' ? (
+        <Text style={styles.noResults}>No churches found matching your search.</Text>
+      ) : filteredChurches.length === 0 ? (
+        <Text style={styles.noResults}>No churches available.</Text>
+      ) : (
+        <FlatList
+          data={filteredChurches}
+          keyExtractor={(item) => item._id}
+          renderItem={renderChurchCard}
+          contentContainerStyle={{ paddingBottom: 90 }}
+        />
+      )}
 
       {/* Bottom Nav */}
       <View style={styles.bottomNav}>
@@ -227,6 +222,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderTopWidth: 1,
     borderColor: "#ccc",
+  },
+  noResults: {
+    textAlign: "center",
+    fontSize: 16,
+    color: "#666",
+    marginTop: 20,
   },
 });
 

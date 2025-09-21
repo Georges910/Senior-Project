@@ -25,6 +25,55 @@ export default function AddAdmin() {
   const [successMsg, setSuccessMsg] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  // Add Church State
+  const [newChurchName, setNewChurchName] = useState("");
+  const [newChurchLocation, setNewChurchLocation] = useState("");
+  const [newChurchAbout, setNewChurchAbout] = useState("");
+  const [newChurchAdmins, setNewChurchAdmins] = useState("");
+  const [addingChurch, setAddingChurch] = useState(false);
+  const [churchSuccessMsg, setChurchSuccessMsg] = useState("");
+  const [churchErrorMsg, setChurchErrorMsg] = useState("");
+
+  const onAddChurch = async () => {
+    if (!newChurchName.trim()) {
+      setChurchErrorMsg("Please enter a church name.");
+      return;
+    }
+    setAddingChurch(true);
+    setChurchErrorMsg("");
+    setChurchSuccessMsg("");
+    try {
+      const adminsArray = newChurchAdmins.trim() ? newChurchAdmins.split(',').map(id => id.trim()) : [];
+      const res = await fetch(`${API_URL}/api/church/ekklesia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newChurchName, location: newChurchLocation, admins: adminsArray }),
+      });
+      let data = null;
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        setChurchErrorMsg("Server did not return valid JSON");
+        return;
+      }
+      if (!res.ok) {
+        setChurchErrorMsg(data?.error || "Failed to add church");
+        setChurchSuccessMsg("");
+        return;
+      }
+      setChurchSuccessMsg("Church was added");
+      setChurchErrorMsg("");
+      setNewChurchName("");
+      setNewChurchLocation("");
+      setNewChurchAdmins("");
+      setNewChurchAdmins("");
+    } catch (err) {
+      setChurchErrorMsg("Could not connect to server");
+    } finally {
+      setAddingChurch(false);
+    }
+  };
+
   const onAddAdmin = async () => {
     if (!fullName || !password || !church) {
       setErrorMsg("Please fill in all fields.");
@@ -85,6 +134,57 @@ export default function AddAdmin() {
         </View>
 
         <View style={styles.sheet}>
+          {/* Add Church Section */}
+          <Text style={{ color: '#173B65', fontWeight: 'bold', fontSize: 18, marginBottom: 8 }}>Add a Church</Text>
+          <View style={styles.inputRow}>
+            <Ionicons name="home-outline" size={18} color="#58617a" style={styles.leftIcon} />
+            <TextInput
+              placeholder="Church Name"
+              placeholderTextColor="#96a0b4"
+              value={newChurchName}
+              onChangeText={setNewChurchName}
+              style={styles.input}
+            />
+          </View>
+          <View style={styles.inputRow}>
+            <Ionicons name="location-outline" size={18} color="#58617a" style={styles.leftIcon} />
+            <TextInput
+              placeholder="Location (optional)"
+              placeholderTextColor="#96a0b4"
+              value={newChurchLocation}
+              onChangeText={setNewChurchLocation}
+              style={styles.input}
+            />
+          </View>
+          
+          <View style={styles.inputRow}>
+            <Ionicons name="people-outline" size={18} color="#58617a" style={styles.leftIcon} />
+            <TextInput
+              placeholder="Admin IDs (comma-separated, optional)"
+              placeholderTextColor="#96a0b4"
+              value={newChurchAdmins}
+              onChangeText={setNewChurchAdmins}
+              style={styles.input}
+            />
+          </View>
+          <TouchableOpacity
+            style={[styles.loginBtn, addingChurch && { opacity: 0.7 }]}
+            onPress={onAddChurch}
+            disabled={addingChurch}
+          >
+            <Text style={styles.loginText}>{addingChurch ? "Adding..." : "Add Church"}</Text>
+          </TouchableOpacity>
+          {churchSuccessMsg ? (
+            <Text style={{ color: "green", marginTop: 8, textAlign: "center", fontSize: 13 }}>
+              {churchSuccessMsg}
+            </Text>
+          ) : null}
+          {churchErrorMsg ? (
+            <Text style={{ color: "red", marginTop: 8, textAlign: "center", fontSize: 13 }}>
+              {churchErrorMsg}
+            </Text>
+          ) : null}
+          {/* End Add Church Section */}
           {/* Full Name */}
           <View style={styles.inputRow}>
             <Ionicons name="person-outline" size={18} color="#58617a" style={styles.leftIcon} />

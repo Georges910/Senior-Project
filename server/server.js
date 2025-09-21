@@ -18,10 +18,12 @@ mongoose.connect(process.env.MONGO_URI, {
 // Import routes
 const authRoutes = require('./routes/Authentication');
 const bookRoutes = require("./routes/Book");
+const churchRoutes = require('./routes/Church');
 
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use("/api/books", bookRoutes);
+app.use('/api/church', churchRoutes);
 
 // Gracefully close MongoDB connection on process exit
 process.on('SIGINT', async () => {
