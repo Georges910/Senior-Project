@@ -309,7 +309,9 @@
 //     buttonOutlineText: { color: "#444", fontWeight: "700" },
 // });
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo, useState, useEffect, useRef } from "react";
+import { Platform } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
     View,
     Text,
@@ -340,12 +342,11 @@ type Book = {
 // ----------------- BottomNav -----------------
 const BottomNav = ({ active, onNavigate }: { active: string; onNavigate: (p: string) => void }) => {
     const buttons = [
-        { name: "Home", icon: "home-outline" },
-        { name: "Find Church", icon: "location-outline" },
-        { name: "Books", icon: "book-outline" },
+        { name: 'Home', icon: 'home' },
+        { name: 'FindChurch', icon: 'search' },
+        { name: 'Books', icon: 'book' },
     ];
     const router = useRouter();
-
     return (
         <View style={bottomNavStyles.container}>
             {buttons.map((b) => (
@@ -353,21 +354,27 @@ const BottomNav = ({ active, onNavigate }: { active: string; onNavigate: (p: str
                     key={b.name}
                     onPress={() => {
                         onNavigate(b.name);
-                        if (b.name === "Home") router.push("/home");
-                        if (b.name === "Find Church") router.push("/FindChurchScreen");
-                        //if (b.name === "Books") return;
+                        if (b.name === 'Home') router.push('/home');
+                        if (b.name === 'FindChurch') router.push('/FindChurchScreen');
+                        // if (b.name === 'Books') return;
                     }}
-                    style={[bottomNavStyles.button, active === b.name && bottomNavStyles.activeButton]}
+                    style={[
+                        bottomNavStyles.button,
+                        active === b.name && bottomNavStyles.activeButton,
+                    ]}
                 >
                     <Ionicons
                         name={b.icon as any}
                         size={24}
-                        color={active === b.name ? "#fff" : "#173B65"}
+                        color={active === b.name ? '#fff' : '#173B65'}
                     />
                     <Text
-                        style={[bottomNavStyles.label, active === b.name && bottomNavStyles.activeLabel]}
+                        style={[
+                            bottomNavStyles.label,
+                            active === b.name && bottomNavStyles.activeLabel,
+                        ]}
                     >
-                        {b.name}
+                        {b.name === 'FindChurch' ? 'Find Church' : b.name}
                     </Text>
                 </TouchableOpacity>
             ))}
@@ -382,24 +389,51 @@ const FindBooksScreen = () => {
     const [selectedBook, setSelectedBook] = useState<Book | null>(null);
     const [modalVisible, setModalVisible] = useState(false);
     const [loading, setLoading] = useState(true);
+    const hasFetched = useRef(false);
     const router = useRouter();
 
     // ----------------- Fetch books -----------------
     useEffect(() => {
+        let isMounted = true;
+        const loadCache = async () => {
+            let cached: Book[] | null = null;
+            try {
+                if (Platform.OS === 'web') {
+                    const raw = localStorage.getItem('booksCache');
+                    if (raw) cached = JSON.parse(raw);
+                } else {
+                    const raw = await AsyncStorage.getItem('booksCache');
+                    if (raw) cached = JSON.parse(raw);
+                }
+            } catch {}
+            if (cached && isMounted) {
+                setBooks(cached);
+                setLoading(false);
+            }
+        };
+        loadCache();
+        if (hasFetched.current) return;
         const fetchBooks = async () => {
             try {
                 const response = await fetch("http://localhost:3000/api/books/book");
                 if (!response.ok) throw new Error("Failed to fetch books");
                 const data: Book[] = await response.json();
                 setBooks(data);
+                // Save to cache
+                if (Platform.OS === 'web') {
+                    localStorage.setItem('booksCache', JSON.stringify(data));
+                } else {
+                    await AsyncStorage.setItem('booksCache', JSON.stringify(data));
+                }
             } catch (error) {
                 console.error("Error fetching books:", error);
             } finally {
-                setLoading(false);
+                if (isMounted) setLoading(false);
+                hasFetched.current = true;
             }
         };
-
         fetchBooks();
+        return () => { isMounted = false; };
     }, []);
 
     // ----------------- Filter books -----------------
@@ -436,7 +470,7 @@ const FindBooksScreen = () => {
             .catch((err) => console.error("Error opening PDF:", err));
     };
 
-    if (loading) {
+    if (loading && books.length === 0) {
         return (
             <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
                 <ActivityIndicator size="large" color="#173B65" />

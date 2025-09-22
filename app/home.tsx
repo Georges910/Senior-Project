@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   SafeAreaView,
   View,
@@ -38,6 +38,25 @@ const HomeScreen: React.FC = () => {
   const [verse, setVerse] = useState<VerseOfDay | null>(null);
   const [prayers, setPrayers] = useState<PrayerItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
+  // Caching
+  useEffect(() => {
+    let isMounted = true;
+    const loadCache = async () => {
+      try {
+        const raw = await AsyncStorage.getItem('homeCache');
+        if (raw) {
+          const { user, verse, prayers, events } = JSON.parse(raw);
+          if (user && isMounted) setUser(user);
+          if (verse && isMounted) setVerse(verse);
+          if (prayers && isMounted) setPrayers(prayers);
+          if (events && isMounted) setEvents(events);
+          setLoading(false);
+        }
+      } catch {}
+    };
+    loadCache();
+    return () => { isMounted = false; };
+  }, []);
 
   // Active page state for bottom nav
   const [activePage, setActivePage] = useState('Home');
@@ -48,7 +67,6 @@ const HomeScreen: React.FC = () => {
       let u = null;
       const token = await AsyncStorage.getItem('jwtToken');
       if (token) {
-        //const API_URL = 'http://10.163.217.128:3000'; // your API URL
         const API_URL = "http://localhost:3000"; 
         const profileRes = await fetch(`${API_URL}/api/auth/profile`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -66,6 +84,8 @@ const HomeScreen: React.FC = () => {
       setVerse(v);
       setPrayers(p);
       setEvents(e);
+      // Save to cache
+      await AsyncStorage.setItem('homeCache', JSON.stringify({ user: u, verse: v, prayers: p, events: e }));
     } finally {
       setLoading(false);
     }

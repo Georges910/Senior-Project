@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   Image,
   FlatList,
+  Platform,
+  Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from '@react-navigation/native';
@@ -20,14 +22,14 @@ const FindChurchScreen = () => {
   // Set "FindChurch" as active
   const [activePage, setActivePage] = useState("FindChurch");
 
-  const [churches, setChurches] = useState<Array<{ _id: string; name: string }>>([]);
+  const [churches, setChurches] = useState<Array<{ _id: string; name: string; location?: string }>>([]);
   useEffect(() => {
     const fetchChurches = async () => {
       try {
         const res = await fetch('http://localhost:3000/api/church/ekklesia');
         const data = await res.json();
         if (Array.isArray(data.churches)) {
-          setChurches(data.churches.map((c: any) => ({ _id: c._id, name: c.name })));
+          setChurches(data.churches.map((c: any) => ({ _id: c._id, name: c.name, location: c.location })));
         } else {
           setChurches([]);
         }
@@ -38,11 +40,32 @@ const FindChurchScreen = () => {
     fetchChurches();
   }, []);
 
+  const openLocation = (location?: string) => {
+    if (location) {
+      if (Platform.OS === "web") {
+        // @ts-ignore
+        if (typeof window !== 'undefined' && window.open) {
+          window.open(location, "_blank");
+        }
+      } else {
+        Linking.openURL(location);
+      }
+    }
+  };
+
   const filteredChurches = churches.filter(c => c.name.toLowerCase().includes(search.toLowerCase()));
 
   const renderChurchCard = ({ item }: any) => (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>{item.name}</Text>
+      {item.location ? (
+        <TouchableOpacity
+          style={styles.detailButton}
+          onPress={() => openLocation(item.location)}
+        >
+          <Text style={styles.detailButtonText}>Location</Text>
+        </TouchableOpacity>
+      ) : null}
     </View>
   );
 
