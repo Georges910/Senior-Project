@@ -4,7 +4,39 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const AdminCredential = require('../models/AdminCredential');
 
+
+
 const router = express.Router();
+
+// Admin Login (checks Ekklesia.admincredentials)
+router.post('/admin-login', async (req, res) => {
+  try {
+    const { email, password, fullName, church } = req.body;
+    // Support login by email or by fullName+church
+    let admin;
+    if (email) {
+      admin = await AdminCredential.findOne({ fullName: email }); // fallback: treat email as fullName
+    } else if (fullName && church) {
+      admin = await AdminCredential.findOne({ fullName, church });
+    }
+    if (!admin) {
+      return res.status(400).json({ error: 'Admin not found' });
+    }
+    const valid = await bcrypt.compare(password, admin.password);
+    if (!valid) {
+      return res.status(400).json({ error: 'Invalid password' });
+    }
+    // Create JWT token
+    const token = jwt.sign({ id: admin._id, fullName: admin.fullName, church: admin.church }, process.env.JWT_SECRET, { expiresIn: '2h' });
+    // Return admin profile (excluding password)
+    const adminProfile = { fullName: admin.fullName, church: admin.church, id: admin._id };
+    return res.json({ message: 'Admin login successful', token, admin: adminProfile });
+  } catch (err) {
+    console.error('Admin login error:', err);
+    return res.status(500).json({ error: 'Admin login failed', details: err?.message || err });
+  }
+});
+
 
 // Admin: Get all users
 router.get('/admin/users', async (req, res) => {

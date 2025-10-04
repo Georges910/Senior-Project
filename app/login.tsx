@@ -96,7 +96,7 @@ export default function Login() {
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.adminWrap}>
-            <TouchableOpacity onPress={() => router.push("/admin")}>
+            <TouchableOpacity onPress={() => router.push("/adminlogin")}>
               <Text style={styles.adminText}>Are You Church Admin?</Text>
             </TouchableOpacity>
           </View>

@@ -51,6 +51,24 @@ router.get('/ekklesia', async (req, res) => {
 });
 
 // GET /api/church/credentials - get all churches from admincredentials
+// PATCH /api/church/ekklesia/:id - update church info in churchscredentials
+router.patch('/ekklesia/:id', async (req, res) => {
+  try {
+  const churchId = req.params.id;
+  const update = {};
+  if (req.body.location !== undefined) update.location = req.body.location;
+  if (req.body.about !== undefined) update.about = req.body.about;
+  if (req.body.schedules !== undefined) update.schedules = req.body.schedules;
+  if (req.body.events !== undefined) update.events = req.body.events;
+  // Add more fields as needed
+  const church = await ChurchsCredential.findByIdAndUpdate(churchId, update, { new: true });
+  if (!church) return res.status(404).json({ error: 'Church not found' });
+  return res.json({ message: 'Church info updated', church });
+  } catch (err) {
+    console.error('Update church info error:', err);
+    return res.status(500).json({ error: 'Failed to update church info', details: err?.message || err });
+  }
+});
 router.get('/credentials', async (req, res) => {
   try {
     // Get all unique church names from admincredentials

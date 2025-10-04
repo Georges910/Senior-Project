@@ -28,7 +28,6 @@ export default function AddAdmin() {
   // Add Church State
   const [newChurchName, setNewChurchName] = useState("");
   const [newChurchLocation, setNewChurchLocation] = useState("");
-  const [newChurchAbout, setNewChurchAbout] = useState("");
   const [newChurchAdmins, setNewChurchAdmins] = useState("");
   const [addingChurch, setAddingChurch] = useState(false);
   const [churchSuccessMsg, setChurchSuccessMsg] = useState("");
@@ -126,7 +125,7 @@ export default function AddAdmin() {
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         <View style={styles.header}>
           <View style={{ width: "100%", flexDirection: "row", justifyContent: "flex-start" }}>
-            <TouchableOpacity onPress={() => router.replace("/admin")}> 
+            <TouchableOpacity onPress={() => router.replace("/adminlogin")}>
               <Text style={styles.backText}>Back</Text>
             </TouchableOpacity>
           </View>

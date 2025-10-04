@@ -37,7 +37,10 @@ const HomeScreen: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [verse, setVerse] = useState<VerseOfDay | null>(null);
   const [prayers, setPrayers] = useState<PrayerItem[]>([]);
+  const [churchSchedules, setChurchSchedules] = useState<any[]>([]);
+  const [weekSchedules, setweekSchedules] = useState<any[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [churchEvents, setChurchEvents] = useState<any[]>([]);
   // Caching
   useEffect(() => {
     let isMounted = true;
@@ -45,11 +48,12 @@ const HomeScreen: React.FC = () => {
       try {
         const raw = await AsyncStorage.getItem('homeCache');
         if (raw) {
-          const { user, verse, prayers, events } = JSON.parse(raw);
+          const { user, verse, prayers, events, churchSchedules } = JSON.parse(raw);
           if (user && isMounted) setUser(user);
           if (verse && isMounted) setVerse(verse);
           if (prayers && isMounted) setPrayers(prayers);
           if (events && isMounted) setEvents(events);
+          if (churchSchedules && isMounted) setChurchSchedules(churchSchedules);
           setLoading(false);
         }
       } catch {}
@@ -84,8 +88,38 @@ const HomeScreen: React.FC = () => {
       setVerse(v);
       setPrayers(p);
       setEvents(e);
+      // Fetch church schedules and events for user's parish
+      let schedules = [];
+      let eventsArr = [];
+      if (u && u.parish) {
+        try {
+          const res = await fetch('http://localhost:3000/api/church/ekklesia');
+          const data = await res.json();
+          if (res.ok && Array.isArray(data.churches)) {
+            const church = data.churches.find((c: any) => c.name === u.parish);
+            if (church && Array.isArray(church.schedules)) {
+              schedules = church.schedules;
+            }
+            if (church && Array.isArray(church.events)) {
+              eventsArr = church.events;
+            }
+          }
+        } catch {}
+      }
+  console.log('Fetched schedules for church:', schedules);
+  setChurchSchedules(schedules);
+  setChurchEvents(eventsArr);
+      // Filter schedules for the next 7 days
+      const todayDate = new Date();
+      const next7Dates = Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(todayDate);
+        d.setDate(todayDate.getDate() + i);
+        return d.toISOString().slice(0, 10); // YYYY-MM-DD
+      });
+      const weekSchedules = schedules.filter((s: any) => next7Dates.includes(s.date));
+      setweekSchedules(weekSchedules);
       // Save to cache
-      await AsyncStorage.setItem('homeCache', JSON.stringify({ user: u, verse: v, prayers: p, events: e }));
+      await AsyncStorage.setItem('homeCache', JSON.stringify({ user: u, verse: v, prayers: p, events: e, churchSchedules: schedules, weekSchedules: weekSchedules }));
     } finally {
       setLoading(false);
     }
@@ -158,6 +192,25 @@ const HomeScreen: React.FC = () => {
               ))}
           </View>
         </View>
+
+       
+          
+          {/* Church Schedules for the Next 7 Days */}
+          {weekSchedules && weekSchedules.length > 0 && (
+            <View style={styles.prayersCard}>
+              <SectionHeader title={isRTL ? 'جدول الكنيسة للأيام القادمة' : 'Church Schedule (Next 7 Days)'} />
+              <View style={styles.prayersList}>
+                {weekSchedules.map((s: any, idx: number) => (
+                  <View key={idx} style={[styles.prayerRow, isRTL && styles.rowRTL]}>
+                    <Text style={styles.prayerTitle}>{s.name}</Text>
+                    <Text style={styles.prayerTime}>{s.date}</Text>
+                    <Text style={styles.prayerTime}>{s.time}</Text>
+                    {s.notes ? <Text style={styles.prayerTitle}>{String(s.notes)}</Text> : null}
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
         {/* Recommendation Events */}
         <SectionHeader title={isRTL ? 'الفعاليات المقترحة' : 'Recommendation Events'} onPress={() => navigation.navigate('Events')} />
@@ -317,6 +370,13 @@ const styles = StyleSheet.create({
   eventTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textDark },
   eventRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   eventMeta: { fontSize: 12, color: COLORS.textDim },
+  eventItem: { backgroundColor: '#f0f4fa', borderRadius: 8, padding: 10, marginBottom: 8 },
+  eventDate: { fontSize: 12, color: '#555', marginTop: 2 },
+  eventDescription: { fontSize: 12, color: '#888', marginTop: 4 },
+  scheduleItem: { backgroundColor: '#f0f4fa', borderRadius: 8, padding: 10, marginBottom: 8 },
+  scheduleName: { fontWeight: 'bold', fontSize: 15, color: '#173B65' },
+  scheduleTime: { fontSize: 14, color: '#555' },
+  scheduleNotes: { fontSize: 13, color: '#888', marginTop: 2 },
 });
 
 const bottomNavStyles = StyleSheet.create({
@@ -345,11 +405,8 @@ const Api = {
   },
 
   async getPrayerScheduleForSelectedChurch(): Promise<PrayerItem[]> {
-    return [
-      { id: 'p1', time: '8:09 AM', titleAr: 'صلاة السحر' },
-      { id: 'p2', time: '9:09 AM', titleAr: 'القداس الإلهي' },
-      { id: 'p3', time: '4:59 PM', titleAr: 'صلاة الغروب' },
-    ];
+    // No preset data; implement API call or return empty array
+    return [];
   },
   async getRecommendedEvents(): Promise<EventItem[]> {
     return [

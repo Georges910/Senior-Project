@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { Platform } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   View,
   Text,
@@ -7,7 +9,6 @@ import {
   TouchableOpacity,
   Image,
   FlatList,
-  Platform,
   Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -23,21 +24,61 @@ const FindChurchScreen = () => {
   const [activePage, setActivePage] = useState("FindChurch");
 
   const [churches, setChurches] = useState<Array<{ _id: string; name: string; location?: string }>>([]);
+  const [eventsByChurch, setEventsByChurch] = useState<{ [churchName: string]: any[] }>({});
+  const [loading, setLoading] = useState(true);
+  const hasFetched = useRef(false);
   useEffect(() => {
-    const fetchChurches = async () => {
+    let isMounted = true;
+    const loadCache = async () => {
+      let cached: any[] | null = null;
+      try {
+        if (Platform.OS === 'web') {
+          const raw = localStorage.getItem('churchesCache');
+          if (raw) cached = JSON.parse(raw);
+        } else {
+          const raw = await AsyncStorage.getItem('churchesCache');
+          if (raw) cached = JSON.parse(raw);
+        }
+      } catch {}
+      if (cached && isMounted) {
+        setChurches(cached);
+        setLoading(false);
+      }
+    };
+    loadCache();
+    if (hasFetched.current) return;
+    const fetchChurchesAndEvents = async () => {
       try {
         const res = await fetch('http://localhost:3000/api/church/ekklesia');
         const data = await res.json();
         if (Array.isArray(data.churches)) {
           setChurches(data.churches.map((c: any) => ({ _id: c._id, name: c.name, location: c.location })));
+          // Save to cache
+          if (Platform.OS === 'web') {
+            localStorage.setItem('churchesCache', JSON.stringify(data.churches));
+          } else {
+            await AsyncStorage.setItem('churchesCache', JSON.stringify(data.churches));
+          }
+          // Fetch events for each church
+          const eventsMap: { [churchName: string]: any[] } = {};
+          for (const church of data.churches) {
+            if (Array.isArray(church.events)) {
+              eventsMap[church.name] = church.events;
+            }
+          }
+          setEventsByChurch(eventsMap);
         } else {
           setChurches([]);
         }
       } catch (err) {
         console.error('Failed to fetch churches:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+        hasFetched.current = true;
       }
     };
-    fetchChurches();
+    fetchChurchesAndEvents();
+    return () => { isMounted = false; };
   }, []);
 
   const openLocation = (location?: string) => {
@@ -66,8 +107,29 @@ const FindChurchScreen = () => {
           <Text style={styles.detailButtonText}>Location</Text>
         </TouchableOpacity>
       ) : null}
+      {/* Events for this church */}
+      {eventsByChurch[item.name] && eventsByChurch[item.name].length > 0 && (
+        <View style={{ marginTop: 8 }}>
+          <Text style={{ fontWeight: 'bold', color: '#173B65', marginBottom: 4 }}>Events:</Text>
+          {eventsByChurch[item.name].map((ev, idx) => (
+            <View key={idx} style={{ backgroundColor: '#f0f4fa', borderRadius: 8, padding: 8, marginBottom: 6 }}>
+              <Text style={{ fontWeight: 'bold', color: '#2980b9' }}>{ev.title}</Text>
+              {ev.date && <Text style={{ color: '#555' }}>{ev.date}</Text>}
+              {ev.description && <Text style={{ color: '#888' }}>{ev.description}</Text>}
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
+
+  if (loading && churches.length === 0) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -85,7 +147,6 @@ const FindChurchScreen = () => {
           onChangeText={setSearch}
         />
       </View>
-
 
       {/* Churches list */}
       {filteredChurches.length === 0 && search.trim() !== '' ? (

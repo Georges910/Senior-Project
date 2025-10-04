@@ -79,7 +79,7 @@ export default function AdminLogin() {
         await AsyncStorage.setItem('adminProfile', JSON.stringify(data.admin));
       }
       setErrorMsg("");
-      router.replace("/admin");
+      router.replace("/AdminDashboard");
     } catch (err) {
       const errorMessage =
         err && typeof err === "object" && "message" in err

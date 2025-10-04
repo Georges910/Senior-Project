@@ -5,7 +5,21 @@ const ChurchsCredentialSchema = new mongoose.Schema({
   location: { type: String },
   about: { type: String },
   admins: [{ type: String }],
-  // Add more fields as needed
+  schedules: [
+    {
+      name: String,
+      time: String,
+      date: String,
+      notes: String
+    }
+  ],
+  events: [
+    {
+      title: String,
+      date: String,
+      description: String
+    }
+  ],
 });
 
 // This will use the 'churchscredentials' collection in MongoDB
