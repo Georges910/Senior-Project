@@ -1,168 +1,172 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const jwt = require('jsonwebtoken');
+const Church = require("../models/ChurchsCredential");
+const multer = require("multer");
+const path = require("path");
 
-const Church = require('../models/Church');
-const ChurchsCredential = require('../models/ChurchsCredential');
-const AdminCredential = require('../models/AdminCredential');
+// === Multer configuration for church images ===
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/churches");
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+const upload = multer({ storage });
 
-// Middleware to authenticate admin via JWT
-function authenticateAdmin(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'No token provided' });
-  jwt.verify(token, process.env.JWT_SECRET, (err, admin) => {
-    if (err) return res.status(403).json({ error: 'Invalid token' });
-    req.admin = admin;
-    next();
+// === Helper to clean expired schedules ===
+function cleanPastPrayers(church) {
+  const now = new Date();
+  church.schedules = church.schedules.filter((sch) => {
+    if (!sch.date || !sch.time) return true;
+    const dt = new Date(`${sch.date}T${sch.time}:00`);
+    return dt > now;
   });
 }
 
-// POST /api/church/ekklesia - add a new church to churchscredentials
-router.post('/ekklesia', async (req, res) => {
+// === Add / update church info ===
+router.post("/add", upload.array("images", 10), async (req, res) => {
+  const { name, location, about, admins } = req.body;
+  const images = req.files ? req.files.map((file) => `/uploads/churches/${file.filename}`) : [];
+
   try {
-    const { name, location, about, admins } = req.body;
-    if (!name || typeof name !== 'string' || !name.trim()) {
-      return res.status(400).json({ error: 'Church name is required' });
+    let church = await Church.findOne({ name });
+    if (church) {
+      church.location = location || church.location;
+      church.about = about || church.about;
+      church.admins = Array.isArray(admins) ? admins : []; // <-- fix here
+      church.images = images.length > 0 ? images : church.images;
+      await church.save();
+      return res.status(200).json({ message: "Church updated", church });
+    } else {
+      church = new Church({
+        name,
+        location,
+        about,
+        admins: Array.isArray(admins) ? admins : [], // <-- fix here
+        images,
+      });
+      await church.save();
+      return res.status(201).json({ message: "Church added", church });
     }
-    // Check for duplicate
-    const existing = await ChurchsCredential.findOne({ name: name.trim() });
-    if (existing) {
-      return res.status(400).json({ error: 'Church already exists' });
+  } catch (err) {
+    console.error("Error adding/updating church:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// === GET assigned churches by admin name ===
+router.get("/assigned/:admin", async (req, res) => {
+  try {
+    const adminName = decodeURIComponent(req.params.admin).trim();
+
+    // Find churches assigned to this admin (case-insensitive)
+    const churches = await Church.find({
+      admins: { $regex: new RegExp(adminName, "i") },
+    });
+
+    if (!churches.length) {
+      return res.status(404).json({ message: "No church assigned to this admin." });
     }
-    const newChurch = new ChurchsCredential({ name: name.trim(), location, about, admins: admins || [] });
-    await newChurch.save();
-    return res.json({ message: 'Church added successfully', church: newChurch });
+
+    // Clean old schedules
+    const now = new Date();
+    churches.forEach((church) => {
+      church.schedules = (church.schedules || []).filter((sch) => {
+        if (!sch.date || !sch.time) return true;
+        const dt = new Date(`${sch.date}T${sch.time}:00`);
+        return dt > now;
+      });
+    });
+
+    res.status(200).json({ churches });
   } catch (err) {
-    console.error('Add ekklesia church error:', err);
-    return res.status(500).json({ error: 'Failed to add church', details: err?.message || err });
+    console.error("Error fetching assigned churches:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// GET /api/church/ekklesia - get all churches from churchscredentials
-router.get('/ekklesia', async (req, res) => {
+// === Get schedule of a specific church ===
+router.get("/:churchId/schedule", async (req, res) => {
   try {
-    const churches = await ChurchsCredential.find({});
-    return res.json({ churches });
+    const { churchId } = req.params;
+    const church = await Church.findOne({ name: churchId });
+
+    if (!church) {
+      return res.status(404).json({ error: "Church not found" });
+    }
+
+    // Clean old schedules
+    const now = new Date();
+    const validSchedules = (church.schedules || []).filter((sch) => {
+      if (!sch.date || !sch.time) return true;
+      const dt = new Date(`${sch.date}T${sch.time}:00`);
+      return dt > now;
+    });
+
+    res.status(200).json({
+      churchName: church.name,
+      schedules: validSchedules,
+    });
   } catch (err) {
-    console.error('Fetch ekklesia churches error:', err);
-    return res.status(500).json({ error: 'Failed to fetch ekklesia churches', details: err?.message || err });
+    console.error("Error fetching church schedule:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// GET /api/church/credentials - get all churches from admincredentials
-// PATCH /api/church/ekklesia/:id - update church info in churchscredentials
-router.patch('/ekklesia/:id', async (req, res) => {
+// === PATCH church info (update schedules, events, images, location, about) ===
+router.patch("/ekklesia/:id", async (req, res) => {
   try {
-  const churchId = req.params.id;
-  const update = {};
-  if (req.body.location !== undefined) update.location = req.body.location;
-  if (req.body.about !== undefined) update.about = req.body.about;
-  if (req.body.schedules !== undefined) update.schedules = req.body.schedules;
-  if (req.body.events !== undefined) update.events = req.body.events;
-  // Add more fields as needed
-  const church = await ChurchsCredential.findByIdAndUpdate(churchId, update, { new: true });
-  if (!church) return res.status(404).json({ error: 'Church not found' });
-  return res.json({ message: 'Church info updated', church });
+    const { id } = req.params;
+    const updateData = req.body; // schedules, events, images, location, about
+
+    const church = await Church.findById(id);
+    if (!church) return res.status(404).json({ error: "Church not found" });
+
+    if (updateData.schedules) church.schedules = updateData.schedules;
+    if (updateData.events) church.events = updateData.events;
+    if (updateData.images) church.images = updateData.images;
+    if (updateData.location) church.location = updateData.location;
+    if (updateData.about) church.about = updateData.about;
+
+    await church.save();
+    res.status(200).json({ message: "Church updated successfully", church });
   } catch (err) {
-    console.error('Update church info error:', err);
-    return res.status(500).json({ error: 'Failed to update church info', details: err?.message || err });
-  }
-});
-router.get('/credentials', async (req, res) => {
-  try {
-    // Get all unique church names from admincredentials
-    const churches = await AdminCredential.find({}, 'church').lean();
-    // Extract unique names
-    const uniqueChurches = [...new Set(churches.map(c => c.church))];
-    return res.json({ churches: uniqueChurches });
-  } catch (err) {
-    console.error('Fetch credential churches error:', err);
-    return res.status(500).json({ error: 'Failed to fetch credential churches', details: err?.message || err });
+    console.error("Error patching church:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// GET /api/church/all - get all churches in the database
-router.get('/all', async (req, res) => {
+// Get all churches
+router.get("/churches", async (req, res) => {
   try {
     const churches = await Church.find({});
-    return res.json({ churches });
+    res.status(200).json({ churches });
   } catch (err) {
-    console.error('Fetch all churches error:', err);
-    return res.status(500).json({ error: 'Failed to fetch churches', details: err?.message || err });
+    console.error("Error fetching churches:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// Add a new church by name
-router.post('/add', async (req, res) => {
+
+// === Delete specific church image ===
+router.delete("/:id/image", async (req, res) => {
   try {
-    console.log('BODY:', req.body);
-    if (!req.body || typeof req.body !== 'object') {
-      return res.status(400).json({ error: 'Request body is missing or invalid' });
-    }
-    const { name } = req.body;
-    if (typeof name !== 'string' || !name.trim()) {
-      return res.status(400).json({ error: 'Church name is required' });
-    }
-    // Check for duplicate
-    const existing = await Church.findOne({ name: name.trim() });
-    if (existing) {
-      return res.status(400).json({ error: 'Church already exists' });
-    }
-    const newChurch = new Church({ name: name.trim() });
-    await newChurch.save();
-    return res.json({ message: 'Church added successfully', church: newChurch });
-  } catch (err) {
-    console.error('Add church error:', err);
-    return res.status(500).json({ error: 'Failed to add church', details: err?.message || err });
-  }
-});
+    const { imagePath } = req.body;
+    const church = await Church.findById(req.params.id);
+    if (!church) return res.status(404).json({ error: "Church not found" });
 
-// GET /api/church/assigned - get churches assigned to this admin and matching church name
-router.get('/assigned', authenticateAdmin, async (req, res) => {
-  try {
-    const adminId = req.admin && req.admin.id;
-    const churchName = req.admin && req.admin.church;
-    if (!adminId || !churchName) return res.status(401).json({ error: 'Unauthorized' });
-    // Find churches where this admin is assigned and name matches
-    const churches = await Church.find({
-      admins: adminId,
-      name: churchName
-    });
-    return res.json({ churches });
-  } catch (err) {
-    console.error('Fetch assigned churches error:', err);
-    return res.status(500).json({ error: 'Failed to fetch assigned churches', details: err?.message || err });
-  }
-});
-
-// PATCH /api/church/:id/info
-router.patch('/:id/info', authenticateAdmin, async (req, res) => {
-  try {
-    const churchId = req.params.id;
-    const adminId = req.admin && req.admin.id;
-    if (!adminId) return res.status(401).json({ error: 'Unauthorized' });
-
-    // Find church and check if admin is assigned
-    const church = await Church.findById(churchId);
-    if (!church) return res.status(404).json({ error: 'Church not found' });
-    if (!church.admins.map(a => a.toString()).includes(adminId)) {
-      return res.status(403).json({ error: 'You are not assigned to this church' });
-    }
-
-    // Update allowed fields
-    const allowed = ['location', 'about', 'number', 'facebook', 'email'];
-    for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        church[key] = req.body[key];
-      }
-    }
+    church.images = church.images.filter((img) => img !== imagePath);
     await church.save();
-    return res.json({ message: 'Church info updated', church });
+
+    res.status(200).json({ message: "Image deleted successfully", images: church.images });
   } catch (err) {
-    console.error('Update church info error:', err);
-    return res.status(500).json({ error: 'Failed to update church info', details: err?.message || err });
+    console.error("Error deleting church image:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
 module.exports = router;
+

@@ -1,31 +1,141 @@
-import React, { useCallback, useState, useEffect } from 'react';
-import {
-  SafeAreaView,
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  ScrollView,
-  ImageBackground,
-  TouchableOpacity,
-  I18nManager,
-  RefreshControl,
-  FlatList,
-  Dimensions,
-} from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useState } from 'react';
+import {
+  Dimensions,
+  FlatList,
+  I18nManager,
+  Image,
+  ImageBackground,
+  Linking,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import BottomNav from "./Components/BottomNav";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_MARGIN = 16;
+const CARD_WIDTH = SCREEN_WIDTH * 0.7;
+const API_URL = 'http://localhost:3000';
+
 
 // ---------- Types ----------
-export type PrayerItem = { id: string; time: string; titleAr: string };
-export type EventItem = { id: string; title: string; parish: string; dateLabel: string; imageUrl: string };
-export type VerseOfDay = { id: string; imageUrl: string; };
+export type PrayerItem = { id: string; time: string; titleAr: string; date: string };
+export type EventItem = { id: string; title: string; parish: string; location: string; dateLabel: string; timeLabel?: string; imageUrl: string };
+export type VerseOfDay = { id: string; imageUrl: string };
 export type UserProfile = { fullName: string; parish: string; email?: string; avatarUrl?: string };
+
+// ---------- Placeholder ----------
+const Placeholder = {
+  avatar: 'https://i.pravatar.cc/100?img=12',
+  banner: 'https://images.unsplash.com/photo-1545420332-3f3a5c62fb54?q=80&w=1200&auto=format&fit=crop',
+};
+
+// ---------- Verse Images ----------
+const verseImages: VerseOfDay[] = [
+  { id: 'v1', imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757760343/Ekklesia/Banner/10_zxz8rk.png' },
+  { id: 'v2', imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757760317/Ekklesia/Banner/3_a1lxfx.png' },
+  { id: 'v3', imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757760317/Ekklesia/Banner/1_oaglss.png' },
+  { id: 'v4', imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757759184/Ekklesia/Banner/9_y9zi2y.png' },
+  { id: 'v5', imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758899/Ekklesia/Banner/2_me5wne.png' },
+  { id: 'v6', imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758874/Ekklesia/Banner/5_bahbqo.png' },
+  { id: 'v7', imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758873/Ekklesia/Banner/8_oqdhwx.png' },
+  { id: 'v8', imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758867/Ekklesia/Banner/7_u5k81e.png' },
+  { id: 'v9', imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758837/Ekklesia/Banner/6_pyjuea.png' },
+  { id: 'v10', imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758837/Ekklesia/Banner/4_uyvb8j.png' },
+];
+
+// ---------- Api service ----------
+const Api = {
+  async getVerseOfDay(): Promise<VerseOfDay> {
+    const day = new Date().getDate();
+    const index = day % verseImages.length;
+    return verseImages[index];
+  },
+
+  async getRecommendedEvents(): Promise<EventItem[]> {
+    try {
+      const res = await fetch(`${API_URL}/api/event`);
+      if (!res.ok) throw new Error('Failed to fetch events');
+      const data = await res.json();
+      if (!Array.isArray(data)) return [];
+      return data.map((e: any) => ({
+        id: e.id || e._id,
+        title: e.title || e.name || '',
+        parish: e.parish || '',
+        location: e.location || '',
+        dateLabel: e.dateLabel || '',
+        timeLabel: e.timeLabel || '',
+        imageUrl: e.imageUrl,
+      }));
+    } catch (err) {
+      console.error('Error fetching recommended events:', err);
+      return [];
+    }
+  },
+
+  async getPrayerScheduleForSelectedChurch(): Promise<PrayerItem[]> {
+    try {
+      const userRaw = await AsyncStorage.getItem('userProfile');
+      if (!userRaw) return [];
+      const user: UserProfile = JSON.parse(userRaw);
+      if (!user?.parish) return [];
+
+      const res = await fetch(`${API_URL}/api/church/${encodeURIComponent(user.parish)}/schedule`);
+      if (!res.ok) throw new Error('Failed to fetch prayers');
+
+      const data = await res.json();
+      if (!data?.schedules) return [];
+
+      // Sort by date & time
+      const sortedSchedules = data.schedules.sort((a: any, b: any) => {
+        const dateA = new Date(`${a.date}T${a.time}`);
+        const dateB = new Date(`${b.date}T${b.time}`);
+        return dateA.getTime() - dateB.getTime();
+      });
+
+      // Map backend schedule to PrayerItem
+      return data.schedules.map((sch: any, index: number) => ({
+        id: index.toString(),
+        time: sch.time,
+        titleAr: sch.name,
+        date: sch.date,
+      }));
+    } catch (err) {
+      console.error('Error fetching prayers:', err);
+      return [];
+    }
+  },
+
+  todayLabel() {
+    const d = new Date();
+    return d.toLocaleDateString(undefined, {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    });
+  },
+};
+
+// ---------- Date Formatter ----------
+const formatDate = (dateStr: string) => {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short', // Nov, Dec etc.
+    year: 'numeric',
+  });
+};
 
 // ---------- HomeScreen ----------
 const HomeScreen: React.FC = () => {
@@ -37,89 +147,34 @@ const HomeScreen: React.FC = () => {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [verse, setVerse] = useState<VerseOfDay | null>(null);
   const [prayers, setPrayers] = useState<PrayerItem[]>([]);
-  const [churchSchedules, setChurchSchedules] = useState<any[]>([]);
-  const [weekSchedules, setweekSchedules] = useState<any[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
-  const [churchEvents, setChurchEvents] = useState<any[]>([]);
-  // Caching
-  useEffect(() => {
-    let isMounted = true;
-    const loadCache = async () => {
-      try {
-        const raw = await AsyncStorage.getItem('homeCache');
-        if (raw) {
-          const { user, verse, prayers, events, churchSchedules } = JSON.parse(raw);
-          if (user && isMounted) setUser(user);
-          if (verse && isMounted) setVerse(verse);
-          if (prayers && isMounted) setPrayers(prayers);
-          if (events && isMounted) setEvents(events);
-          if (churchSchedules && isMounted) setChurchSchedules(churchSchedules);
-          setLoading(false);
-        }
-      } catch {}
-    };
-    loadCache();
-    return () => { isMounted = false; };
-  }, []);
-
-  // Active page state for bottom nav
-  const [activePage, setActivePage] = useState('Home');
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      let u = null;
+      let u: UserProfile | null = null;
       const token = await AsyncStorage.getItem('jwtToken');
       if (token) {
-        const API_URL = "http://localhost:3000"; 
-        const profileRes = await fetch(`${API_URL}/api/auth/profile`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const profileRes = await fetch(`${API_URL}/api/auth/profile`, { headers: { 'Authorization': `Bearer ${token}` } });
         if (profileRes.ok) {
           u = await profileRes.json();
+          await AsyncStorage.setItem('userProfile', JSON.stringify(u));
         }
       }
+
       const [v, p, e] = await Promise.all([
         Api.getVerseOfDay(),
         Api.getPrayerScheduleForSelectedChurch(),
         Api.getRecommendedEvents(),
       ]);
+
       setUser(u);
       setVerse(v);
       setPrayers(p);
       setEvents(e);
-      // Fetch church schedules and events for user's parish
-      let schedules = [];
-      let eventsArr = [];
-      if (u && u.parish) {
-        try {
-          const res = await fetch('http://localhost:3000/api/church/ekklesia');
-          const data = await res.json();
-          if (res.ok && Array.isArray(data.churches)) {
-            const church = data.churches.find((c: any) => c.name === u.parish);
-            if (church && Array.isArray(church.schedules)) {
-              schedules = church.schedules;
-            }
-            if (church && Array.isArray(church.events)) {
-              eventsArr = church.events;
-            }
-          }
-        } catch {}
-      }
-  console.log('Fetched schedules for church:', schedules);
-  setChurchSchedules(schedules);
-  setChurchEvents(eventsArr);
-      // Filter schedules for the next 7 days
-      const todayDate = new Date();
-      const next7Dates = Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(todayDate);
-        d.setDate(todayDate.getDate() + i);
-        return d.toISOString().slice(0, 10); // YYYY-MM-DD
-      });
-      const weekSchedules = schedules.filter((s: any) => next7Dates.includes(s.date));
-      setweekSchedules(weekSchedules);
-      // Save to cache
-      await AsyncStorage.setItem('homeCache', JSON.stringify({ user: u, verse: v, prayers: p, events: e, churchSchedules: schedules, weekSchedules: weekSchedules }));
+
+    } catch (err) {
+      console.error('Error in loadAll:', err);
     } finally {
       setLoading(false);
     }
@@ -149,7 +204,6 @@ const HomeScreen: React.FC = () => {
         {/* Top Bar */}
         <View style={styles.topRow}>
           <View style={[styles.profileRow, isRTL && styles.rowRTL]}>
-            <Image source={{ uri: user?.avatarUrl || Placeholder.avatar }} style={styles.avatar} />
             <View style={[styles.profileTextWrap, isRTL && { marginRight: 10 }]}>
               <Text style={styles.nameText}>{user?.fullName || 'Full Name'}</Text>
               <View style={[styles.parishRow, isRTL && styles.rowRTL]}>
@@ -158,9 +212,6 @@ const HomeScreen: React.FC = () => {
               </View>
             </View>
           </View>
-          <TouchableOpacity onPress={() => navigation.navigate('Notifications')} style={styles.notifBtn}>
-            <Ionicons name="notifications-outline" size={20} />
-          </TouchableOpacity>
           <TouchableOpacity style={styles.iconButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={28} color="black" />
           </TouchableOpacity>
@@ -169,75 +220,50 @@ const HomeScreen: React.FC = () => {
         {/* Verse Banner */}
         <View style={styles.bannerCard}>
           <ImageBackground
-            source={{ uri: verse?.imageUrl }}
+            source={{ uri: verse?.imageUrl || Placeholder.banner }}
             style={styles.bannerImage}
             imageStyle={styles.bannerImageRadius}
             resizeMode="cover"
-            >
+          >
             <LinearGradient colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.35)']} style={styles.bannerGradient} />
           </ImageBackground>
         </View>
 
         {/* Daily Prayer Schedule */}
-        <SectionHeader title={isRTL ? 'جدول الصلوات اليومية' : 'Daily Prayer Schedule'} onPress={() => navigation.navigate('PrayerSchedule')} />
+        <SectionHeader title={isRTL ? 'جدول الصلوات اليومية' : 'Daily Prayer Schedule'} />
         <View style={styles.prayersCard}>
           <Text style={styles.dateText}>{Api.todayLabel()}</Text>
           <View style={styles.prayersList}>
             {loading && prayers.length === 0 ? <SkeletonPrayerList /> :
               prayers.map((p) => (
-                <View key={p.id} style={[styles.prayerRow, isRTL && styles.rowRTL]}>
-                  <Text style={styles.prayerTime}>{p.time}</Text>
+                <View key={p.id} style={[styles.prayerRowCustom, isRTL && styles.rowRTL]}>
+                  <View style={styles.timeColumn}>
+                    <Text style={styles.prayerDate}>{formatDate(p.date)}</Text>
+                    <Text style={styles.prayerTime}>{p.time}</Text>
+                  </View>
                   <Text style={styles.prayerTitle}>{p.titleAr}</Text>
                 </View>
-              ))}
+              ))
+            }
           </View>
         </View>
 
-       
-          
-          {/* Church Schedules for the Next 7 Days */}
-          {weekSchedules && weekSchedules.length > 0 && (
-            <View style={styles.prayersCard}>
-              <SectionHeader title={isRTL ? 'جدول الكنيسة للأيام القادمة' : 'Church Schedule (Next 7 Days)'} />
-              <View style={styles.prayersList}>
-                {weekSchedules.map((s: any, idx: number) => (
-                  <View key={idx} style={[styles.prayerRow, isRTL && styles.rowRTL]}>
-                    <Text style={styles.prayerTitle}>{s.name}</Text>
-                    <Text style={styles.prayerTime}>{s.date}</Text>
-                    <Text style={styles.prayerTime}>{s.time}</Text>
-                    {s.notes ? <Text style={styles.prayerTitle}>{String(s.notes)}</Text> : null}
-                  </View>
-                ))}
-              </View>
-            </View>
-          )}
-
         {/* Recommendation Events */}
-        <SectionHeader title={isRTL ? 'الفعاليات المقترحة' : 'Recommendation Events'} onPress={() => navigation.navigate('Events')} />
+        <SectionHeader title={isRTL ? 'الفعاليات المقترحة' : 'Recommended Events'} />
         <FlatList
           data={events}
           keyExtractor={(item) => item.id}
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 16 }}
+          contentContainerStyle={{ paddingHorizontal: SCREEN_WIDTH * 0.04 }}
           ListEmptyComponent={loading ? <SkeletonEventCard /> : null}
           renderItem={({ item }) => <EventCard item={item} onPress={() => navigation.navigate('EventDetails', { id: item.id })} />}
         />
 
-        <View style={{ height: 80 }} /> {/* space for bottom nav */}
+        <View style={{ height: 80 }} />
       </ScrollView>
 
-      {/* Bottom Navigation */}
-      <BottomNav
-        active={activePage}
-        onNavigate={(page) => {
-          setActivePage(page);
-          if (page === 'Home') return;
-          navigation.navigate(page);
-          if (page === "FindChurch") router.push("/FindChurchScreen");
-          if (page === "Books") router.push("/BooksScreen");
-        }}
-      />
+      <BottomNav active="Home" />
     </SafeAreaView>
   );
 };
@@ -245,14 +271,11 @@ const HomeScreen: React.FC = () => {
 export default HomeScreen;
 
 // ---------- Components ----------
-const SectionHeader: React.FC<{ title: string; onPress?: () => void }> = ({ title, onPress }) => {
+const SectionHeader: React.FC<{ title: string; onPress?: () => void }> = ({ title }) => {
   const isRTL = I18nManager.isRTL;
   return (
     <View style={[styles.sectionHeader, isRTL && styles.rowRTL]}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <TouchableOpacity onPress={onPress} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Text style={styles.seeAllText}>{isRTL ? 'عرض الكل' : 'See All'}</Text>
-      </TouchableOpacity>
     </View>
   );
 };
@@ -268,58 +291,71 @@ const SkeletonPrayerList = () => (
 const SkeletonEventCard = () => <View style={[styles.eventCard, { backgroundColor: '#eee' }]} />;
 
 const EventCard: React.FC<{ item: EventItem; onPress: () => void }> = ({ item, onPress }) => {
-  const isRTL = I18nManager.isRTL;
+  const openMap = () => {
+    if (item.location) {
+      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`;
+      Linking.openURL(url);
+    }
+  };
+
   return (
-    <TouchableOpacity onPress={onPress} style={styles.eventCard} activeOpacity={0.9}>
-      <Image source={{ uri: item.imageUrl }} style={styles.eventImage} />
-      <View style={styles.eventContent}>
-        <Text numberOfLines={2} style={styles.eventTitle}>{item.title}</Text>
-        <View style={[styles.eventRow, isRTL && styles.rowRTL]}>
-          <Ionicons name="location" size={14} />
-          <Text style={styles.eventMeta} numberOfLines={1}>{item.parish}</Text>
-        </View>
-        <View style={[styles.eventRow, isRTL && styles.rowRTL]}>
-          <Ionicons name="calendar" size={14} />
-          <Text style={styles.eventMeta} numberOfLines={1}>{item.dateLabel}</Text>
-        </View>
+    <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={styles.eventCard}>
+      {item.imageUrl ? (
+        <Image source={{ uri: item.imageUrl }} style={styles.eventImage} resizeMode="cover" />
+      ) : null}
+      <View style={styles.eventDetails}>
+        <Text style={styles.eventTitle}>{item.title}</Text>
+        <Text style={styles.eventText}>
+          {Array.isArray(item.dateLabel)
+            ? item.dateLabel.map(d => formatDate(d)).join(" - ")
+            : formatDate(item.dateLabel)}
+        </Text>
+        <Text style={styles.eventText}>{item.timeLabel}</Text>
+        <TouchableOpacity onPress={openMap} activeOpacity={0.7}>
+          <Text style={styles.eventMeta}>{item.parish}</Text>
+        </TouchableOpacity>
       </View>
     </TouchableOpacity>
   );
 };
 
-// ---------- Bottom Navigation ----------
-const BottomNav: React.FC<{ active: string; onNavigate: (page: string) => void }> = ({ active, onNavigate }) => {
-  const buttons = [
-    { name: 'Home', icon: 'home' },
-    { name: 'FindChurch', icon: 'search' },
-    { name: 'Books', icon: 'book' },
-  ];
-
-  return (
-    <View style={bottomNavStyles.container}>
-      {buttons.map((b) => (
-        <TouchableOpacity
-          key={b.name}
-          onPress={() => onNavigate(b.name)}
-          style={[
-            bottomNavStyles.button,
-            active === b.name && bottomNavStyles.activeButton,
-          ]}
-        >
-          <Ionicons name={b.icon as any} size={24} color={active === b.name ? '#fff' : '#173B65'} />
-          <Text style={[bottomNavStyles.label, active === b.name && bottomNavStyles.activeLabel]}>
-            {b.name}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-};
-
 // ---------- Styles ----------
 const COLORS = { bg: '#f7f9fb', card: '#fff', primary: '#173B65', accent: '#1F7BC7', textDark: '#0b2239', textDim: '#5e6c79' };
-
 const styles = StyleSheet.create({
+  eventCard: {
+    width: CARD_WIDTH,
+    marginRight: CARD_MARGIN,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+    overflow: 'hidden',
+    minHeight: 230,
+  },
+  eventImage: {
+    width: '100%',
+    height: 160,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  eventDetails: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  eventTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#173B65',
+    marginBottom: 4,
+  },
+  eventText: {
+    fontSize: 13,
+    color: '#444',
+    marginBottom: 6,
+  },
   safe: { flex: 1, backgroundColor: COLORS.bg },
   scrollContent: { paddingBottom: 24 },
   topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
@@ -333,135 +369,50 @@ const styles = StyleSheet.create({
   notifBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.card, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   iconButton: { marginLeft: 15 },
   bannerCard: { paddingHorizontal: 16, paddingVertical: 8 },
-  bannerImage: {
-    width: '100%',
-    height: SCREEN_WIDTH * 0.35, // 35% of screen width
-    borderRadius: 14,
-  },
-
+  bannerImage: { width: '100%', height: SCREEN_WIDTH * 0.35, borderRadius: 14 },
   bannerImageRadius: { borderRadius: 14 },
   bannerGradient: { ...StyleSheet.absoluteFillObject },
-  bannerTextWrap: { position: 'absolute', bottom: 10, left: 14, right: 14 },
-  alignRight: { alignItems: 'flex-end' },
-  bannerVerse: { color: '#fff', fontSize: 13, fontWeight: '600', lineHeight: 18 },
-  bannerRef: { color: '#fff', opacity: 0.9, marginTop: 4, fontSize: 11 },
   sectionHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { fontSize: 13, color: COLORS.textDark, fontWeight: '700' },
-  seeAllText: { fontSize: 12, color: COLORS.accent, fontWeight: '600' },
   prayersCard: { backgroundColor: COLORS.bg, paddingHorizontal: 16, paddingBottom: 8 },
   dateText: { fontSize: 11, color: COLORS.textDim, marginBottom: 6 },
   prayersList: { borderRadius: 14, backgroundColor: COLORS.card, paddingHorizontal: 14, paddingVertical: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
   prayerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eef0f3' },
-  prayerTime: { fontSize: 12, color: COLORS.textDark, fontWeight: '600' },
-  prayerTitle: { fontSize: 12, color: COLORS.textDark },
-  skeletonRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, paddingHorizontal: 15, backgroundColor: '#f0f0f0', borderRadius: 8, marginBottom: 10 },
-  eventCard: {
-    width: SCREEN_WIDTH * 0.8, // 70% of screen width
-    marginRight: 12,
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  eventImage: {
-    width: '100%',
-    height: SCREEN_WIDTH * 0.4, // 40% of screen width
+  skeletonRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 24, backgroundColor: '#e0e0e0', borderRadius: 6 },
+  eventMeta: { fontSize: 10, color: COLORS.textDim },
+  prayerRowCustom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#eef0f3',
   },
 
-  eventContent: { padding: 12, gap: 6 },
-  eventTitle: { fontSize: 13, fontWeight: '700', color: COLORS.textDark },
-  eventRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  eventMeta: { fontSize: 12, color: COLORS.textDim },
-  eventItem: { backgroundColor: '#f0f4fa', borderRadius: 8, padding: 10, marginBottom: 8 },
-  eventDate: { fontSize: 12, color: '#555', marginTop: 2 },
-  eventDescription: { fontSize: 12, color: '#888', marginTop: 4 },
-  scheduleItem: { backgroundColor: '#f0f4fa', borderRadius: 8, padding: 10, marginBottom: 8 },
-  scheduleName: { fontWeight: 'bold', fontSize: 15, color: '#173B65' },
-  scheduleTime: { fontSize: 14, color: '#555' },
-  scheduleNotes: { fontSize: 13, color: '#888', marginTop: 2 },
+  timeColumn: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',  // date above time
+    width: 80,                  // fixed width for all rows
+  },
+
+  prayerDate: {
+    fontSize: 11,
+    color: COLORS.textDim,
+    marginBottom: 2,
+    lineHeight: 14,
+  },
+
+  prayerTime: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primary,
+    lineHeight: 16,
+  },
+
+  prayerTitle: {
+    fontSize: 12,
+    color: COLORS.textDark,
+    fontWeight: '500',
+    flexShrink: 1,             // allow long titles to wrap
+  },
 });
-
-const bottomNavStyles = StyleSheet.create({
-  container: {
-    position: 'absolute', bottom: 16, alignSelf: 'center', flexDirection: 'row', justifyContent: 'space-between',
-    backgroundColor: '#fff', width: '70%', borderRadius: 40, padding: 8, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 5
-  },
-  button: { flex: 1, alignItems: 'center', paddingVertical: 6 },
-  activeButton: { backgroundColor: '#173B65', borderRadius: 30 },
-  label: { fontSize: 11, fontWeight: '600', color: '#173B65', marginTop: 2 },
-  activeLabel: { color: '#fff' },
-});
-
-// ---------- Placeholder ----------
-const Placeholder = {
-  avatar: 'https://i.pravatar.cc/100?img=12',
-  banner: 'https://images.unsplash.com/photo-1545420332-3f3a5c62fb54?q=80&w=1200&auto=format&fit=crop',
-};
-
-// ---------- Api service ----------
-const Api = {
-  async getVerseOfDay(): Promise<VerseOfDay> {
-    const day = new Date().getDate(); // 1-31
-    const index = day % verseImages.length; // rotate over 10 banners
-    return verseImages[index];
-  },
-
-  async getPrayerScheduleForSelectedChurch(): Promise<PrayerItem[]> {
-    // No preset data; implement API call or return empty array
-    return [];
-  },
-  async getRecommendedEvents(): Promise<EventItem[]> {
-    return [
-      { id: 'e1', title: 'THE CHOIR OF EPARCHY OF TRIPOLI', parish: 'St. Georges, Mina', dateLabel: 'Friday, August 1 2025', imageUrl: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=1400&auto=format&fit=crop' },
-      { id: 'e2', title: 'KIDS SUMMER CLUB — WEEK 3', parish: 'St. Georges, Mina', dateLabel: 'Saturday, August 2 2025', imageUrl: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?q=80&w=1400&auto=format&fit=crop' },
-    ];
-  },
-  todayLabel() {
-    const d = new Date();
-    return d.toLocaleDateString(undefined, { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-  },
-};
-
-//Store the claudinary URL
-
-const verseImages = [
-  {
-    id: 'v1',
-    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757760343/Ekklesia/Banner/10_zxz8rk.png',
-  },
-  {
-    id: 'v2',
-    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757760317/Ekklesia/Banner/3_a1lxfx.png',
-  },
-  {
-    id: 'v3',
-    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757760317/Ekklesia/Banner/1_oaglss.png',
-  },
-  {
-    id: 'v4',
-    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757759184/Ekklesia/Banner/9_y9zi2y.png',
-  },
-  {
-    id: 'v5',
-    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758899/Ekklesia/Banner/2_me5wne.png',
-  },
-  {
-    id: 'v6',
-    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758874/Ekklesia/Banner/5_bahbqo.png',
-  },
-  {
-    id: 'v7',
-    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758873/Ekklesia/Banner/8_oqdhwx.png',
-  },
-  {
-    id: 'v8',
-    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758867/Ekklesia/Banner/7_u5k81e.png',
-  },
-  {
-    id: 'v9',
-    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758837/Ekklesia/Banner/6_pyjuea.png',
-  },
-  {
-    id: 'v10',
-    imageUrl: 'https://res.cloudinary.com/firstwork/image/upload/v1757758837/Ekklesia/Banner/4_uyvb8j.png',
-  },
-];
-

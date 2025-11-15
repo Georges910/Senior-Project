@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-//const API_URL = "http://10.163.217.128:3000"
+//const API_URL = "http://10.24.113.128:3000"
 const API_URL = "http://localhost:3000"; 
 
 export default function Login() {

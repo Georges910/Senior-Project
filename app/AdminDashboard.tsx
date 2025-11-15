@@ -1,54 +1,79 @@
-
 import React, { useEffect, useState } from "react";
-import { SafeAreaView, View, Text, StyleSheet, FlatList, ActivityIndicator, ScrollView, TextInput, TouchableOpacity, Alert } from "react-native";
+import {
+  SafeAreaView,
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TextInput,
+  TouchableOpacity,
+  Alert,
+  Image,
+  FlatList,
+} from "react-native";
+import { Picker } from "@react-native-picker/picker";
+import { launchImageLibrary } from "react-native-image-picker";
 import { getAdminProfile } from "./utils/getAdminProfile";
-import { Picker } from '@react-native-picker/picker';
 
 const API_URL = "http://localhost:3000";
+//const API_URL = "http://10.24.113.128:3000"
+const prayers = ["صلاة نصف الليل", "صلاة السحر", "القداس الالهي", "الساعة الأولى", "الساعة الثالثة", "الساعة السادسة", "الساعة التاسعة", "صلاة الغروب", "صلاة النوم الكبرى", "صلاة الديح", "صلاة السجدة", "القداس السابق تقديسه"];
 
 const AdminDashboard = () => {
-  // Daily schedule state (for each church)
-  const [scheduleName, setScheduleName] = useState("");
+  const [assignedChurches, setAssignedChurches] = useState<any[]>([]);
+  const [adminName, setAdminName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  // shared schedule inputs
+  const [schedulePrayer, setSchedulePrayer] = useState("");
+  const [scheduleDay, setScheduleDay] = useState("");
   const [scheduleTime, setScheduleTime] = useState("");
   const [scheduleNotes, setScheduleNotes] = useState("");
-  const [scheduleDay, setScheduleDay] = useState("");
-  // Generate next 7 days with day name and date
+
+  // event inputs
+  const [newEventName, setNewEventName] = useState("");
+  const [newEventDates, setNewEventDates] = useState<string[]>([]);
+  const [newEventTimeFrom, setNewEventTimeFrom] = useState("");
+  const [newEventTimeTo, setNewEventTimeTo] = useState("");
+
+  // generate next 7 days (starting tomorrow)
   const next7Days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
-    d.setDate(d.getDate() + i);
-    const dayName = d.toLocaleDateString(undefined, { weekday: 'long' });
+    d.setDate(d.getDate() + i + 1);
+    const dayName = d.toLocaleDateString(undefined, { weekday: "long" });
     const dayNum = d.getDate();
-    const monthName = d.toLocaleDateString(undefined, { month: 'short' });
-    const year = d.getFullYear();
+    const monthName = d.toLocaleDateString(undefined, { month: "short" });
     const display = `${dayName} ${dayNum} ${monthName}`;
     const value = d.toISOString().slice(0, 10); // YYYY-MM-DD
     return { display, value };
   });
-  // Helper for time options
+
+  // 24-hour half-hour options
   const generateTimeOptions = () => {
-    const times = [];
-    let hour = 7, minute = 0;
-    for (let i = 0; i < 48; i++) {
-      const h = ((hour + Math.floor(minute / 60)) % 24);
-      const m = minute % 60;
-      const ampm = h < 12 ? 'AM' : 'PM';
-      const displayHour = h % 12 === 0 ? 12 : h % 12;
-      const timeStr = `${displayHour}:${m.toString().padStart(2, '0')} ${ampm}`;
-      times.push(timeStr);
-      minute += 15;
-      if (minute >= 60) {
-        hour++;
-        minute = minute % 60;
+    const times: string[] = [];
+    for (let h = 0; h < 24; h++) {
+      for (let m of [0, 30]) {
+        const hh = h.toString().padStart(2, "0");
+        const mm = m === 0 ? "00" : "30";
+        times.push(`${hh}:${mm}`);
       }
     }
     return times;
   };
   const timeOptions = generateTimeOptions();
-  const [assignedChurches, setAssignedChurches] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [adminName, setAdminName] = useState("");
 
+  // compare helper: dateStr = YYYY-MM-DD, timeStr = HH:MM
+  const isDateTimeInFuture = (dateStr: string, timeStr: string) => {
+    try {
+      const dt = new Date(`${dateStr}T${timeStr}:00`);
+      return dt.getTime() > Date.now();
+    } catch {
+      return false;
+    }
+  };
+
+  // fetch churches assigned to admin
   useEffect(() => {
     const fetchAssignedChurches = async () => {
       setLoading(true);
@@ -61,19 +86,14 @@ const AdminDashboard = () => {
           return;
         }
         setAdminName(profile.fullName);
-        // Fetch all churches from churchscredentials
-        const res = await fetch(`${API_URL}/api/church/ekklesia`);
-        const data = await res.json();
-        if (!res.ok) {
-          setError(data?.error || "Failed to fetch churches");
-          setLoading(false);
-          return;
-        }
-        // Filter churches where admin is in the admins array
-        const assigned = (data.churches || []).filter((church: any) =>
-          Array.isArray(church.admins) && church.admins.includes(profile.fullName)
-        );
-        setAssignedChurches(assigned);
+        const res = await fetch(`${API_URL}/api/church/assigned/${encodeURIComponent(profile.fullName)}`);
+const data = await res.json();
+if (!res.ok) {
+  setError(data?.error || "Failed to fetch assigned churches");
+  setLoading(false);
+  return;
+}
+setAssignedChurches(data.churches || []);
       } catch (err) {
         setError("Could not fetch assigned churches");
       } finally {
@@ -83,32 +103,91 @@ const AdminDashboard = () => {
     fetchAssignedChurches();
   }, []);
 
-
+  // helper to PATCH a field (schedules/events/images etc.)
+  const patchChurch = async (churchId: string, payload: any) => {
+    const res = await fetch(`${API_URL}/api/church/ekklesia/${churchId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error || "Failed to patch church");
+    return data;
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.topRow}>
-          <Text style={styles.title}>Welcome, {adminName || "Admin"}!</Text>
-        </View>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Churches assigned to you</Text>
-        </View>
+        <Text style={styles.title}>Welcome, {adminName || "Admin"}!</Text>
+
         {loading ? (
-          <ActivityIndicator size="large" color="#173B65" style={{ marginTop: 24 }} />
+          <Text style={{ textAlign: "center", marginTop: 20 }}>Loading...</Text>
         ) : error ? (
           <Text style={styles.error}>{error}</Text>
         ) : assignedChurches.length === 0 ? (
-          <Text style={styles.noChurches}>No churches assigned to you.</Text>
+          <Text style={styles.noChurches}>No churches assigned.</Text>
         ) : (
           assignedChurches.map((church, idx) => (
-            <View style={styles.churchCard} key={church._id || idx}>
+            <View key={church._id || idx} style={styles.churchCard}>
               <Text style={styles.churchName}>{church.name}</Text>
+
+              {/* images horizontal */}
+              <ScrollView horizontal style={{ marginVertical: 8 }}>
+                {(church.images || []).map((img: string, i: number) => (
+                  <View key={i} style={{ marginRight: 6, position: "relative" }}>
+                    <Image source={{ uri: img }} style={styles.churchImageSmall} />
+                    <TouchableOpacity
+                      style={styles.smallDeleteBtn}
+                      onPress={async () => {
+                        // remove image locally
+                        const updated = [...assignedChurches];
+                        updated[idx].images = (updated[idx].images || []).filter((_: any, j: number) => j !== i);
+                        setAssignedChurches(updated);
+                        // patch backend
+                        try {
+                          await patchChurch(church._id, { images: updated[idx].images });
+                        } catch {
+                          Alert.alert("Error", "Could not delete image on server");
+                        }
+                      }}
+                    >
+                      <Text style={{ color: "#fff", fontSize: 12 }}>X</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                <TouchableOpacity
+                  style={[styles.addBtn, { paddingHorizontal: 12 }]}
+                  onPress={() =>
+                    launchImageLibrary({ mediaType: "photo", quality: 0.7 }, async (res) => {
+                      if (res.didCancel) return;
+                      if (res.errorCode) {
+                        Alert.alert("Error", res.errorMessage || "Could not pick image");
+                        return;
+                      }
+                      const uri = res.assets?.[0].uri || "";
+                      const updated = [...assignedChurches];
+                      if (!updated[idx].images) updated[idx].images = [];
+                      updated[idx].images.push(uri);
+                      setAssignedChurches(updated);
+                      try {
+                        await patchChurch(church._id, { images: updated[idx].images });
+                      } catch {
+                        Alert.alert("Error", "Could not save image to server");
+                      }
+                    })
+                  }
+                >
+                  <Text style={styles.addBtnText}>Add Church Image</Text>
+                </TouchableOpacity>
+              </ScrollView>
+
+              {/* location & about */}
               <TextInput
                 style={styles.input}
                 placeholder="Location"
                 value={church.location}
-                onChangeText={val => {
+                onChangeText={(val) => {
                   const updated = [...assignedChurches];
                   updated[idx].location = val;
                   setAssignedChurches(updated);
@@ -118,150 +197,318 @@ const AdminDashboard = () => {
                 style={[styles.input, { height: 100 }]}
                 placeholder="About"
                 value={church.about}
-                onChangeText={val => {
+                multiline
+                numberOfLines={5}
+                onChangeText={(val) => {
                   const updated = [...assignedChurches];
                   updated[idx].about = val;
                   setAssignedChurches(updated);
                 }}
-                multiline
-                numberOfLines={5}
               />
-               <TouchableOpacity
+
+              <TouchableOpacity
                 style={styles.saveBtn}
                 onPress={async () => {
                   try {
-                    const res = await fetch(`${API_URL}/api/church/ekklesia/${church._id}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ location: church.location, about: church.about, schedules: church.schedules }),
+                    await patchChurch(church._id, {
+                      location: church.location,
+                      about: church.about,
+                      images: church.images || [],
                     });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data?.error || "Failed to update church info");
                     Alert.alert("Success", "Church info updated!");
-                  } catch (err) {
-                    Alert.alert("Error", typeof err === "object" && err !== null && "message" in err ? (err as { message?: string }).message || "Could not connect to server" : "Could not connect to server");
+                  } catch {
+                    Alert.alert("Error", "Could not update church info");
                   }
                 }}
               >
                 <Text style={styles.saveBtnText}>Save Info</Text>
               </TouchableOpacity>
-              {/* Daily Schedule Section */}
+
+              {/* ---------------- SCHEDULE ---------------- */}
               <Text style={styles.sectionTitle}>Add Daily Schedule</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Schedule Name"
-                value={scheduleName}
-                onChangeText={setScheduleName}
-              />
-              <View style={{ marginTop: 8, marginBottom: 8 }}>
-                <Text style={{ marginBottom: 4, fontWeight: 'bold', color: '#173B65' }}>Day & Date</Text>
-                <View style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 8, backgroundColor: '#f9f9f9' }}>
-                  <Picker
-                    selectedValue={scheduleDay}
-                    onValueChange={setScheduleDay}
-                    style={{ height: 40 }}
-                  >
-                    <Picker.Item label="Select day" value="" />
-                    {next7Days.map((d, idx) => (
-                      <Picker.Item key={idx} label={d.display} value={d.value} />
-                    ))}
-                  </Picker>
-                </View>
+
+              <View style={styles.pickerContainer}>
+                <Picker selectedValue={schedulePrayer} onValueChange={setSchedulePrayer} style={{ height: 40 }}>
+                  <Picker.Item label="Select Prayer" value="" />
+                  {prayers.map((p, i) => (
+                    <Picker.Item key={i} label={p} value={p} />
+                  ))}
+                </Picker>
               </View>
-              <View style={{ marginTop: 8, marginBottom: 8 }}>
-                
-                <View style={{ borderWidth: 1, borderColor: '#ccc', borderRadius: 8, backgroundColor: '#f9f9f9' }}>
-                  <Picker
-                    selectedValue={scheduleTime}
-                    onValueChange={setScheduleTime}
-                    style={{ height: 40 }}
-                  >
-                    <Picker.Item label="Select time" value="" />
-                    {timeOptions.map((t, idx) => (
-                      <Picker.Item key={idx} label={t} value={t} />
-                    ))}
-                  </Picker>
-                </View>
+
+              <View style={styles.pickerContainer}>
+                <Picker selectedValue={scheduleDay} onValueChange={setScheduleDay} style={{ height: 40 }}>
+                  <Picker.Item label="Select Day" value="" />
+                  {next7Days.map((d, i) => (
+                    <Picker.Item key={i} label={d.display} value={d.value} />
+                  ))}
+                </Picker>
               </View>
+
+              <View style={styles.pickerContainer}>
+                <Picker selectedValue={scheduleTime} onValueChange={setScheduleTime} style={{ height: 40 }}>
+                  <Picker.Item label="Select Time" value="" />
+                  {timeOptions.map((t, i) => (
+                    <Picker.Item key={i} label={t} value={t} />
+                  ))}
+                </Picker>
+              </View>
+
               <TextInput
                 style={styles.input}
                 placeholder="Notes (optional)"
                 value={scheduleNotes}
                 onChangeText={setScheduleNotes}
               />
+
               <TouchableOpacity
                 style={styles.addBtn}
                 onPress={async () => {
-                  if (!scheduleName || !scheduleTime || !scheduleDay) {
-                    Alert.alert("Please enter schedule name, time, and day.");
+                  if (!schedulePrayer || !scheduleDay || !scheduleTime) {
+                    Alert.alert("Please fill prayer, day, and time");
                     return;
                   }
                   const updated = [...assignedChurches];
                   if (!updated[idx].schedules) updated[idx].schedules = [];
-                  updated[idx].schedules.push({ name: scheduleName, time: scheduleTime, date: scheduleDay, notes: scheduleNotes });
+                  const newSchedule = {
+                    name: schedulePrayer,
+                    date: scheduleDay,
+                    time: scheduleTime,
+                    notes: scheduleNotes,
+                  };
+                  updated[idx].schedules.push(newSchedule);
                   setAssignedChurches(updated);
-                  // Save to backend immediately
+
                   try {
-                    const res = await fetch(`${API_URL}/api/church/ekklesia/${church._id}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ schedules: updated[idx].schedules }),
-                    });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data?.error || "Failed to update schedule");
+                    await patchChurch(church._id, { schedules: updated[idx].schedules });
                     Alert.alert("Success", "Schedule added!");
-                  } catch (err) {
-                    Alert.alert("Error", typeof err === "object" && err !== null && "message" in err ? (err as { message?: string }).message || "Could not connect to server" : "Could not connect to server");
+                  } catch {
+                    Alert.alert("Error", "Could not add schedule");
                   }
-                  setScheduleName("");
-                  setScheduleTime("");
+
+                  setSchedulePrayer("");
                   setScheduleDay("");
+                  setScheduleTime("");
                   setScheduleNotes("");
                 }}
               >
                 <Text style={styles.addBtnText}>Add to Schedule</Text>
               </TouchableOpacity>
-              {/* List of schedules */}
-              {church.schedules && church.schedules.length > 0 && (
-                <View style={{ marginTop: 10, width: '100%' }}>
-                  <Text style={styles.sectionTitle}>Current Daily Schedules</Text>
-                  <FlatList
-                    data={church.schedules}
-                    keyExtractor={(_, idx) => idx.toString()}
-                    renderItem={({ item, index }) => (
-                      <View style={styles.scheduleItem}>
-                        <Text style={styles.scheduleName}>{item.name}</Text>
-                        <Text style={styles.scheduleTime}>{item.time} - {item.day || item.date}</Text>
-                        {item.notes ? <Text style={styles.scheduleNotes}>{item.notes}</Text> : null}
+
+              {/* Upcoming schedules rendered from original array so index matches */}
+              {Array.isArray(church.schedules) && church.schedules.length > 0 && (
+                <View style={{ marginTop: 10 }}>
+                  <Text style={styles.sectionTitle}>Upcoming Schedules</Text>
+                  {church.schedules.map((s: any, index: number) => {
+                    // only render if future
+                    if (!isDateTimeInFuture(s.date, s.time)) return null;
+                    return (
+                      <View key={index} style={styles.scheduleItem}>
+                        <Text style={styles.scheduleName}>{s.name}</Text>
+                        <Text style={styles.scheduleTime}>
+                          {s.date} - {s.time}
+                        </Text>
+                        {s.notes ? <Text style={styles.scheduleNotes}>{s.notes}</Text> : null}
                         <TouchableOpacity
-                          style={styles.removeBtn}
+                          style={[styles.removeBtn, { marginTop: 6 }]}
                           onPress={async () => {
+                            // same behaviour as original code: remove by index and patch
                             const updated = [...assignedChurches];
                             updated[idx].schedules = updated[idx].schedules.filter((_: any, i: number) => i !== index);
                             setAssignedChurches(updated);
                             try {
-                              const res = await fetch(`${API_URL}/api/church/ekklesia/${church._id}`, {
-                                method: "PATCH",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ schedules: updated[idx].schedules }),
-                              });
-                              const data = await res.json();
-                              if (!res.ok) throw new Error(data?.error || "Failed to delete schedule");
+                              await patchChurch(church._id, { schedules: updated[idx].schedules });
                               Alert.alert("Success", "Schedule deleted!");
-                            } catch (err) {
-                              Alert.alert("Error", typeof err === "object" && err !== null && "message" in err ? (err as { message?: string }).message || "Could not connect to server" : "Could not connect to server");
+                            } catch {
+                              Alert.alert("Error", "Could not delete schedule");
                             }
                           }}
                         >
                           <Text style={styles.removeBtnText}>Delete</Text>
                         </TouchableOpacity>
                       </View>
-                    )}
-                  />
+                    );
+                  })}
                 </View>
               )}
-              
-             
+
+              {/* ---------------- EVENTS ---------------- */}
+              <Text style={styles.sectionTitle}>Add Event</Text>
+
+              <TextInput style={styles.input} placeholder="Event Name" value={newEventName} onChangeText={setNewEventName} />
+
+              {/* pick date and append to list */}
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={null}
+                  onValueChange={(val) => {
+                    if (!val) return;
+                    if (!newEventDates.includes(val)) setNewEventDates((p) => [...p, val]);
+                  }}
+                  style={{ height: 40 }}
+                >
+                  <Picker.Item label="Select Event Date (add multiple)" value="" />
+                  {next7Days.map((d, i) => (
+                    <Picker.Item key={i} label={d.display} value={d.value} />
+                  ))}
+                </Picker>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", marginTop: 8 }}>
+                  {newEventDates.map((dt, i) => (
+                    <TouchableOpacity key={i} onPress={() => setNewEventDates((p) => p.filter((x) => x !== dt))} style={styles.dateChip}>
+                      <Text style={{ color: "#fff", fontSize: 13 }}>{dt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <View style={{ flex: 1, marginRight: 4 }}>
+                  <Text style={{ marginBottom: 4, fontWeight: "bold" }}>Time From</Text>
+                  <View style={styles.pickerContainer}>
+                    <Picker selectedValue={newEventTimeFrom} onValueChange={setNewEventTimeFrom} style={{ height: 40 }}>
+                      <Picker.Item label="Select Start" value="" />
+                      {timeOptions.map((t, i) => (
+                        <Picker.Item key={i} label={t} value={t} />
+                      ))}
+                    </Picker>
+                  </View>
+                </View>
+                <View style={{ flex: 1, marginLeft: 4 }}>
+                  <Text style={{ marginBottom: 4, fontWeight: "bold" }}>Time To</Text>
+                  <View style={styles.pickerContainer}>
+                    <Picker selectedValue={newEventTimeTo} onValueChange={setNewEventTimeTo} style={{ height: 40 }}>
+                      <Picker.Item label="Select End" value="" />
+                      {timeOptions.map((t, i) => (
+                        <Picker.Item key={i} label={t} value={t} />
+                      ))}
+                    </Picker>
+                  </View>
+                </View>
+              </View>
+
+              {/* add/change event image (single) */}
+              <TouchableOpacity
+                style={[styles.addBtn, { backgroundColor: "#27ae60" }]}
+                onPress={() =>
+                  launchImageLibrary({ mediaType: "photo", quality: 0.7 }, (res) => {
+                    if (res.didCancel) return;
+                    if (res.errorCode) {
+                      Alert.alert("Error", res.errorMessage || "Could not pick image");
+                      return;
+                    }
+                    const uri = res.assets?.[0].uri || "";
+                    const updated = [...assignedChurches];
+                    updated[idx].newEventImage = uri;
+                    setAssignedChurches(updated);
+                  })
+                }
+              >
+                <Text style={styles.addBtnText}>{church.newEventImage ? "Change Event Image" : "Add Event Image"}</Text>
+              </TouchableOpacity>
+              {church.newEventImage ? <Text style={{ fontSize: 12, color: "#555", marginTop: 4 }}>Image selected ✅</Text> : null}
+
+              <TouchableOpacity
+                style={styles.addBtn}
+                onPress={async () => {
+                  if (!newEventName || newEventDates.length === 0 || !newEventTimeFrom || !newEventTimeTo) {
+                    Alert.alert("Please fill all event details");
+                    return;
+                  }
+                  const newEvent = {
+                    name: newEventName,
+                    dates: newEventDates,
+                    timeFrom: newEventTimeFrom,
+                    timeTo: newEventTimeTo,
+                    location: church.location || "",
+                    image: church.newEventImage || "",
+                  };
+                  const updated = [...assignedChurches];
+                  if (!updated[idx].events) updated[idx].events = [];
+                  updated[idx].events.push(newEvent);
+                  setAssignedChurches(updated);
+
+                  try {
+                    await patchChurch(church._id, { events: updated[idx].events });
+                    Alert.alert("Success", "Event added successfully!");
+                  } catch {
+                    Alert.alert("Error", "Could not add event");
+                  }
+
+                  // reset
+                  setNewEventName("");
+                  setNewEventDates([]);
+                  setNewEventTimeFrom("");
+                  setNewEventTimeTo("");
+                  const reset = [...assignedChurches];
+                  reset[idx].newEventImage = "";
+                  setAssignedChurches(reset);
+                }}
+              >
+                <Text style={styles.addBtnText}>Add Event</Text>
+              </TouchableOpacity>
+
+              {/* upcoming events rendered from original array so index matches on delete */}
+              {Array.isArray(church.events) && church.events.length > 0 && (
+                <View style={{ marginTop: 10 }}>
+                  <Text style={styles.sectionTitle}>Upcoming Events</Text>
+                  {church.events.map((ev: any, index: number) => {
+                    const hasFutureDate = Array.isArray(ev.dates)
+                      ? ev.dates.some((d: string) => {
+                        const timeTo = ev.timeTo || ev.timeFrom || "23:59";
+                        return isDateTimeInFuture(d, timeTo);
+                      })
+                      : false;
+                    if (!hasFutureDate) return null;
+
+                    return (
+                      <View key={index} style={styles.scheduleItem}>
+                        {/* Image first */}
+                        {ev.image ? (
+                          <Image
+                            source={{ uri: ev.image }}
+                            style={{
+                              width: "100%",
+                              height: 180,
+                              borderRadius: 10,
+                              marginBottom: 10,
+                            }}
+                            resizeMode="cover"
+                          />
+                        ) : null}
+
+                        {/* Event details */}
+                        <View style={{ paddingHorizontal: 6 }}>
+                          <Text style={[styles.scheduleName, { marginBottom: 4 }]}>{ev.name}</Text>
+                          <Text style={[styles.scheduleTime, { color: "#555" }]}>
+                            {(ev.dates || []).join(" - ")} {"\n"}
+                            {ev.timeFrom} - {ev.timeTo} {"\n"}
+                            {church.name}
+                          </Text>
+                        </View>
+
+                        {/* Delete button */}
+                        <TouchableOpacity
+                          style={[styles.removeBtn, { marginTop: 10 }]}
+                          onPress={async () => {
+                            const updated = [...assignedChurches];
+                            updated[idx].events = updated[idx].events.filter((_: any, i: number) => i !== index);
+                            setAssignedChurches(updated);
+                            try {
+                              await patchChurch(church._id, { events: updated[idx].events });
+                              Alert.alert("Success", "Event deleted!");
+                            } catch {
+                              Alert.alert("Error", "Could not delete event");
+                            }
+                          }}
+                        >
+                          <Text style={styles.removeBtnText}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+
+                </View>
+              )}
             </View>
           ))
         )}
@@ -273,6 +520,7 @@ const AdminDashboard = () => {
 
 export default AdminDashboard;
 
+// ------------------- STYLES -------------------
 const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
@@ -282,123 +530,132 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   addBtn: {
-    backgroundColor: '#2980b9',
+    backgroundColor: "#2980b9",
     paddingVertical: 8,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 8,
     marginBottom: 8,
   },
   addBtnText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: "#fff",
+    fontWeight: "bold",
     fontSize: 14,
   },
   scheduleItem: {
-    backgroundColor: '#f0f4fa',
-    borderRadius: 8,
+    backgroundColor: "#fff",
     padding: 10,
-    marginBottom: 8,
+    borderRadius: 10,
+    marginVertical: 10,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   scheduleName: {
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontSize: 15,
-    color: '#173B65',
+    color: "#173B65",
   },
   scheduleTime: {
     fontSize: 14,
-    color: '#555',
+    color: "#555",
   },
   scheduleNotes: {
     fontSize: 13,
-    color: '#888',
+    color: "#888",
     marginTop: 2,
   },
   input: {
-    borderColor: '#ccc',
+    borderColor: "#ccc",
     borderWidth: 1,
     borderRadius: 8,
     padding: 8,
     marginTop: 8,
     fontSize: 15,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: "#f9f9f9",
   },
   saveBtn: {
     marginTop: 10,
-    backgroundColor: '#1F7BC7',
+    backgroundColor: "#1F7BC7",
     paddingVertical: 10,
     borderRadius: 8,
-    alignItems: 'center',
-    shadowColor: '#000',
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 2,
   },
   saveBtnText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: "#fff",
+    fontWeight: "bold",
     fontSize: 15,
     letterSpacing: 0.5,
   },
-  safe: { flex: 1, backgroundColor: '#f7f9fb' },
+  safe: { flex: 1, backgroundColor: "#f7f9fb" },
   scrollContent: { paddingBottom: 24 },
-  topRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingTop: 18, paddingBottom: 4 },
-  sectionHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start' },
-  // ...existing code...
-  error: { color: 'red', marginTop: 16, textAlign: 'center', fontWeight: 'bold', fontSize: 15 },
-  noChurches: { marginTop: 16, color: '#888', fontSize: 15, textAlign: 'center', fontStyle: 'italic' },
-  container: {},
   title: {
     fontSize: 24,
     fontWeight: "bold",
     color: "#173B65",
     marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#555",
-    marginBottom: 12,
-    textAlign: 'center',
+    textAlign: "center",
   },
   churchCard: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 16,
     padding: 16,
     marginBottom: 14,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOpacity: 0.05,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
-    width: '100%',
+    width: "100%",
   },
   churchName: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#173B65',
+    fontWeight: "bold",
+    color: "#173B65",
     marginBottom: 4,
   },
-  churchLocation: {
-    fontSize: 14,
-    color: '#555',
-    marginBottom: 2,
-  },
-  churchAbout: {
-    fontSize: 13,
-    color: '#888',
-    marginTop: 2,
+  churchImageSmall: { width: 80, height: 80, borderRadius: 8 },
+  smallDeleteBtn: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    backgroundColor: "#e74c3c",
+    borderRadius: 10,
+    padding: 4,
   },
   removeBtn: {
     marginTop: 10,
-    backgroundColor: '#e74c3c',
+    backgroundColor: "#e74c3c",
     paddingVertical: 8,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
   },
   removeBtnText: {
-    color: '#fff',
-    fontWeight: 'bold',
+    color: "#fff",
+    fontWeight: "bold",
     fontSize: 14,
   },
+  pickerContainer: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    marginBottom: 8,
+    backgroundColor: "#fff",
+  },
+  dateChip: {
+    backgroundColor: "#10a5d8",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  error: { color: "red", marginTop: 16, textAlign: "center", fontWeight: "bold", fontSize: 15 },
+  noChurches: { marginTop: 16, color: "#888", fontSize: 15, textAlign: "center", fontStyle: "italic" },
 });

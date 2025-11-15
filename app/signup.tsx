@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, Alert, ScrollView
@@ -6,9 +6,10 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from "expo-router";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Picker } from '@react-native-picker/picker';
 
-//const API_URL = 'http://10.163.217.128:3000';
-const API_URL = "http://localhost:3000"; 
+//const API_URL = "http://10.24.113.128:3000"
+const API_URL = "http://localhost:3000";
 
 export default function SignupScreen() {
   const [fullName, setFullName] = useState("");
@@ -20,12 +21,31 @@ export default function SignupScreen() {
   const [showPass, setShowPass] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+  const [churches, setChurches] = useState<{ name: string }[]>([]);
   const router = useRouter();
 
   function validateEmail(e: string) {
     const re = /\S+@\S+\.\S+/;
     return re.test(e);
   }
+
+  useEffect(() => {
+    const fetchChurches = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/church/churches`);
+        const data = await res.json();
+        if (res.ok && data.churches) {
+          setChurches(data.churches);
+        } else {
+          console.log("Failed to load churches:", data.error);
+        }
+      } catch (err) {
+        console.error("Error fetching churches:", err);
+      }
+    };
+    fetchChurches();
+  }, []);
+
 
   async function onSignUp() {
     setErrorMsg("");
@@ -168,15 +188,26 @@ export default function SignupScreen() {
               color="#58617a"
               style={styles.icon}
             />
-            <TextInput
-              placeholder="Your Parish"
-              placeholderTextColor="#96a0b4"
-              value={parish}
-              onChangeText={setParish}
-              style={styles.input}
-              returnKeyType="next"
-            />
+
+            <Picker
+              selectedValue={parish}
+              onValueChange={(itemValue) => setParish(itemValue)}
+              style={{
+                flex: 1,
+                fontSize: 15,
+                color: parish ? "#222" : "#96a0b4", // ✅ dynamic color here
+                borderWidth: 0,
+                backgroundColor: "transparent",
+              }}
+            >
+              <Picker.Item label="Select your parish" value="" color="#96a0b4" />
+              {churches.map((p) => (
+                <Picker.Item key={p.name} label={p.name} value={p.name} />
+              ))}
+            </Picker>
+
           </View>
+
 
           {/* Email */}
           <View style={styles.inputWrap}>
@@ -342,4 +373,5 @@ const styles = StyleSheet.create({
   },
   signBtnText: { color: "#fff", fontWeight: "600", fontSize: 16 },
   smallGrey: { color: "#9aa1b6", fontSize: 13 },
+
 });
