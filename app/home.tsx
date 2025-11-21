@@ -1,5 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { saveLike, fetchUserLikes } from './utils/recommend';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -148,6 +149,9 @@ const HomeScreen: React.FC = () => {
   const [verse, setVerse] = useState<VerseOfDay | null>(null);
   const [prayers, setPrayers] = useState<PrayerItem[]>([]);
   const [events, setEvents] = useState<EventItem[]>([]);
+  const [parishEvents, setParishEvents] = useState<EventItem[]>([]);
+  const [otherEvents, setOtherEvents] = useState<EventItem[]>([]);
+  const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -172,6 +176,99 @@ const HomeScreen: React.FC = () => {
       setVerse(v);
       setPrayers(p);
       setEvents(e);
+
+      // If server returned no events (maybe filtered by dates), try fetching raw churches
+      // and extract events directly as a fallback so the client can display them for debugging.
+      if ((!Array.isArray(e) || e.length === 0)) {
+        try {
+          const resCh = await fetch(`${API_URL}/api/church/churches`);
+          if (resCh.ok) {
+            const dataCh = await resCh.json();
+            const raw = dataCh?.churches || [];
+            const fallbackEvents: EventItem[] = [];
+            raw.forEach((churchDoc: any) => {
+              const chName = churchDoc.name || '';
+              const evs = Array.isArray(churchDoc.events) ? churchDoc.events : [];
+              evs.forEach((ev: any) => {
+                fallbackEvents.push({
+                  id: ev._id || ev.id || `${chName}-${Math.random()}`,
+                  title: ev.name || ev.title || '',
+                  parish: chName,
+                  location: ev.location || churchDoc.location || '',
+                  dateLabel: Array.isArray(ev.dates) ? ev.dates : (ev.date || ''),
+                  timeLabel: ev.timeFrom && ev.timeTo ? `${ev.timeFrom} - ${ev.timeTo}` : (ev.timeFrom || ev.timeTo || ''),
+                  imageUrl: ev.images?.[0] || ev.image || '',
+                });
+              });
+            });
+            if (fallbackEvents.length > 0) setEvents(fallbackEvents);
+          }
+        } catch (err) {
+          console.error('Fallback church events fetch failed:', err);
+        }
+      }
+
+      // derive parish-specific events from fetched events and user profile
+      try {
+        let parishName = u?.parish;
+        if (!parishName) {
+          const stored = await AsyncStorage.getItem('userProfile');
+          if (stored) {
+            try { const parsed = JSON.parse(stored); parishName = parsed?.parish || parishName; } catch {}
+          }
+        }
+        if (parishName) {
+          const matches = Array.isArray(e) ? e.filter(ev => ev.parish && String(ev.parish).toLowerCase().includes(String(parishName).toLowerCase())) : [];
+          setParishEvents(matches);
+        } else {
+          setParishEvents([]);
+        }
+      } catch (err) {
+        console.error('Error deriving parish events:', err);
+        setParishEvents([]);
+      }
+
+      // gather events from all churches to show 'other churches' events
+      try {
+        const resAll = await fetch(`${API_URL}/api/church/churches`);
+        if (resAll.ok) {
+          const dataAll = await resAll.json();
+          const raw = dataAll?.churches || [];
+          const extracted: EventItem[] = [];
+          raw.forEach((churchDoc: any) => {
+            const chName = churchDoc.name || '';
+            const evs = Array.isArray(churchDoc.events) ? churchDoc.events : [];
+            evs.forEach((ev: any) => {
+              extracted.push({
+                id: ev._id || ev.id || `${chName}-${Math.random()}`,
+                title: ev.name || ev.title || '',
+                parish: chName,
+                location: ev.location || churchDoc.location || '',
+                dateLabel: Array.isArray(ev.dates) ? ev.dates : (ev.date || ''),
+                timeLabel: ev.timeFrom && ev.timeTo ? `${ev.timeFrom} - ${ev.timeTo}` : (ev.timeFrom || ev.timeTo || ''),
+                imageUrl: ev.images?.[0] || ev.image || '',
+              });
+            });
+          });
+          const parishNameLower = (u?.parish || '').toLowerCase();
+          const parishMatches = parishNameLower ? extracted.filter(ev => ev.parish && String(ev.parish).toLowerCase().includes(parishNameLower)) : [];
+          const others = extracted.filter(ev => !parishMatches.some(pm => String(pm.id) === String(ev.id)));
+          setOtherEvents(others);
+          // if original recommended events were empty, adopt extracted events as fallback
+          if ((!Array.isArray(e) || e.length === 0) && extracted.length > 0) setEvents(extracted);
+        }
+      } catch (err) {
+        console.error('Error extracting all church events:', err);
+      }
+
+      // load user likes if authenticated (simple list of liked event ids)
+      try {
+        const likes = await fetchUserLikes();
+        const likedIds = Array.isArray(likes?.likedEvents) ? likes.likedEvents.map((id: any) => String(id)) : [];
+        setLikedSet(new Set(likedIds));
+      } catch (err) {
+        // ignore if not logged in
+      }
 
     } catch (err) {
       console.error('Error in loadAll:', err);
@@ -248,16 +345,94 @@ const HomeScreen: React.FC = () => {
           </View>
         </View>
 
-        {/* Recommendation Events */}
-        <SectionHeader title={isRTL ? 'الفعاليات المقترحة' : 'Recommended Events'} />
+        {/* Parish Events */}
+        <SectionHeader title={isRTL ? 'فعاليات الرعية' : 'Parish Events'} />
         <FlatList
-          data={events}
+          data={parishEvents}
           keyExtractor={(item) => item.id}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: SCREEN_WIDTH * 0.04 }}
-          ListEmptyComponent={loading ? <SkeletonEventCard /> : null}
-          renderItem={({ item }) => <EventCard item={item} onPress={() => navigation.navigate('EventDetails', { id: item.id })} />}
+          ListEmptyComponent={loading ? <SkeletonEventCard /> : (
+            <View style={{ padding: 12 }}>
+              {user?.parish ? (
+                <Text style={{ color: '#666' }}>No upcoming parish events.</Text>
+              ) : (
+                <Text style={{ color: '#666' }}>Set your parish in profile to see local events.</Text>
+              )}
+            </View>
+          )}
+          renderItem={({ item }) => (
+            <EventCard
+              item={item}
+              onPress={() => navigation.navigate('EventDetails', { id: item.id })}
+              liked={likedSet.has(String(item.id))}
+              onToggleLike={async () => {
+                const token = await AsyncStorage.getItem('jwtToken');
+                if (!token) { alert('Please login to like'); return; }
+                const id = String(item.id);
+                const isLiked = likedSet.has(id);
+                const prev = new Set(likedSet);
+                // optimistic toggle
+                const next = new Set(likedSet);
+                if (isLiked) next.delete(id); else next.add(id);
+                setLikedSet(next);
+                  try {
+                    await saveLike({ itemId: id, itemType: 'event', action: isLiked ? 'unlike' : 'like' });
+                    // refresh authoritative likes (server returns { likedEvents: [ids] })
+                    const likesRes = await fetchUserLikes();
+                    const likedIds = Array.isArray(likesRes?.likedEvents) ? likesRes.likedEvents.map((i: any) => String(i)) : [];
+                    setLikedSet(new Set(likedIds));
+                  } catch (err) {
+                  console.error(err);
+                  setLikedSet(prev); // revert
+                  alert('Failed to update like');
+                }
+              }}
+            />
+          )}
+        />
+
+        {/* Other Churches Events */}
+        <SectionHeader title={isRTL ? 'الفعاليات المقترحة' : 'Recommended Events'} />
+        <FlatList
+          data={otherEvents}
+          keyExtractor={(item) => item.id}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: SCREEN_WIDTH * 0.04 }}
+          ListEmptyComponent={loading ? <SkeletonEventCard /> : (
+            <View style={{ padding: 12 }}>
+              <Text style={{ color: '#666' }}>No events from other churches right now.</Text>
+            </View>
+          )}
+          renderItem={({ item }) => (
+            <EventCard
+              item={item}
+              onPress={() => navigation.navigate('EventDetails', { id: item.id })}
+              liked={likedSet.has(String(item.id))}
+              onToggleLike={async () => {
+                const token = await AsyncStorage.getItem('jwtToken');
+                if (!token) { alert('Please login to like'); return; }
+                const id = String(item.id);
+                const isLiked = likedSet.has(id);
+                const prev = new Set(likedSet);
+                const next = new Set(likedSet);
+                if (isLiked) next.delete(id); else next.add(id);
+                setLikedSet(next);
+                try {
+                  await saveLike({ itemId: id, itemType: 'event', action: isLiked ? 'unlike' : 'like' });
+                  const likesRes = await fetchUserLikes();
+                  const likedIds = Array.isArray(likesRes?.likedEvents) ? likesRes.likedEvents.map((i: any) => String(i)) : [];
+                  setLikedSet(new Set(likedIds));
+                } catch (err) {
+                  console.error(err);
+                  setLikedSet(prev);
+                  alert('Failed to update like');
+                }
+              }}
+            />
+          )}
         />
 
         <View style={{ height: 80 }} />
@@ -290,7 +465,7 @@ const SkeletonPrayerList = () => (
 
 const SkeletonEventCard = () => <View style={[styles.eventCard, { backgroundColor: '#eee' }]} />;
 
-const EventCard: React.FC<{ item: EventItem; onPress: () => void }> = ({ item, onPress }) => {
+const EventCard: React.FC<{ item: EventItem; onPress: () => void; liked?: boolean; onToggleLike?: () => void }> = ({ item, onPress, liked, onToggleLike }) => {
   const openMap = () => {
     if (item.location) {
       const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`;
@@ -304,7 +479,12 @@ const EventCard: React.FC<{ item: EventItem; onPress: () => void }> = ({ item, o
         <Image source={{ uri: item.imageUrl }} style={styles.eventImage} resizeMode="cover" />
       ) : null}
       <View style={styles.eventDetails}>
-        <Text style={styles.eventTitle}>{item.title}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={styles.eventTitle}>{item.title}</Text>
+          <TouchableOpacity onPress={onToggleLike} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={18} color={liked ? '#e74c3c' : '#333'} />
+          </TouchableOpacity>
+        </View>
         <Text style={styles.eventText}>
           {Array.isArray(item.dateLabel)
             ? item.dateLabel.map(d => formatDate(d)).join(" - ")

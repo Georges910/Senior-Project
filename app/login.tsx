@@ -87,6 +87,8 @@ export default function Login() {
     }
   };
 
+  
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -159,7 +161,7 @@ export default function Login() {
           </View>
 
           {/* Forgot password */}
-          <TouchableOpacity style={{ alignSelf: "center", marginTop: 10 }}>
+          <TouchableOpacity style={{ alignSelf: "center", marginTop: 10 }} onPress={() => router.push('/forgepassword')}>
             <Text style={styles.forgot}>Forgot Password?</Text>
           </TouchableOpacity>
 

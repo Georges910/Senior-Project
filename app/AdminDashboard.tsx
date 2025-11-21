@@ -11,6 +11,9 @@ import {
   Image,
   FlatList,
 } from "react-native";
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Picker } from "@react-native-picker/picker";
 import { launchImageLibrary } from "react-native-image-picker";
 import { getAdminProfile } from "./utils/getAdminProfile";
@@ -103,6 +106,15 @@ setAssignedChurches(data.churches || []);
     fetchAssignedChurches();
   }, []);
 
+  const router = useRouter();
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.removeItem('userProfile');
+      await AsyncStorage.removeItem('jwtToken');
+    } catch (e) {}
+    router.replace('/adminlogin');
+  };
+
   // helper to PATCH a field (schedules/events/images etc.)
   const patchChurch = async (churchId: string, payload: any) => {
     const res = await fetch(`${API_URL}/api/church/ekklesia/${churchId}`, {
@@ -118,7 +130,12 @@ setAssignedChurches(data.churches || []);
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Welcome, {adminName || "Admin"}!</Text>
+        <View style={styles.headerRow}>
+          <Text style={[styles.title, { flex: 1, textAlign: 'center' }]}>Welcome, {adminName || "Admin"}!</Text>
+          <TouchableOpacity style={styles.iconButton} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={24} color="black" />
+          </TouchableOpacity>
+        </View>
 
         {loading ? (
           <Text style={{ textAlign: "center", marginTop: 20 }}>Loading...</Text>
@@ -658,4 +675,6 @@ const styles = StyleSheet.create({
   },
   error: { color: "red", marginTop: 16, textAlign: "center", fontWeight: "bold", fontSize: 15 },
   noChurches: { marginTop: 16, color: "#888", fontSize: 15, textAlign: "center", fontStyle: "italic" },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, marginTop: 8 },
+  iconButton: { padding: 6, marginLeft: 8 },
 });

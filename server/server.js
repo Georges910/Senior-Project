@@ -24,12 +24,14 @@ const authRoutes = require('./routes/Authentication');
 const bookRoutes = require('./routes/Book');
 const churchRoutes = require('./routes/Church');
 const eventRoutes = require('./routes/Events');
+const userLikesRoutes = require('./routes/UserLikes');
 
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/books', bookRoutes);
 app.use('/api/church', churchRoutes);
 app.use('/api/event', eventRoutes);
+app.use('/api/user', userLikesRoutes);
 
 // Graceful shutdown
 process.on('SIGINT', async () => {

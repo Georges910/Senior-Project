@@ -1,12 +1,16 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const sendResetEmail = require('../email');
 const User = require('../models/User');
 const AdminCredential = require('../models/AdminCredential');
 
 
 
 const router = express.Router();
+
+// email sending is handled by server/email.js which uses SMTP env vars
 
 // Admin Login (checks Ekklesia.admincredentials)
 router.post('/admin-login', async (req, res) => {
@@ -145,6 +149,86 @@ router.post('/login', async (req, res) => {
 
   } catch (err) {
     res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Forgot password: generate a token and email it (or return token in dev)
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Respond success to avoid account enumeration
+      return res.json({ message: 'If an account with that email exists, a reset email has been sent' });
+    }
+
+    // generate token
+    const token = crypto.randomBytes(20).toString('hex');
+    const expires = Date.now() + 1000 * 60 * 60; // 1 hour
+
+    user.resetPasswordToken = token;
+    user.resetPasswordExpires = new Date(expires);
+    await user.save();
+
+    const resetUrl = `${process.env.FRONTEND_URL ? process.env.FRONTEND_URL.replace(/\/$/, '') : 'http://localhost:19006'}/reset-password/${token}`;
+
+    // Try to send using centralized email helper
+    try {
+      await sendResetEmail(email, token, email);
+      return res.json({ message: 'If an account with that email exists, a reset email has been sent' });
+    } catch (mailErr) {
+      console.error('[UserAuth] sendMail failed:', mailErr);
+      // In development return the token so developer can continue testing
+      if (process.env.NODE_ENV !== 'production') {
+        const payload = { message: 'Reset token generated (email send failed)', token };
+        return res.json(payload);
+      }
+      return res.status(500).json({ error: 'Failed to send reset email' });
+    }
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    return res.status(500).json({ error: 'Failed to process forgot password' });
+  }
+});
+
+// Reset password: accept token + newPassword
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { token, email, newPassword } = req.body || {};
+    if (!token || !email || !newPassword) return res.status(400).json({ error: 'token, email and newPassword required' });
+
+    const user = await User.findOne({ email, resetPasswordToken: token, resetPasswordExpires: { $gt: new Date() } });
+    if (!user) return res.status(400).json({ error: 'Invalid or expired token' });
+
+    // update password
+    const hashed = await bcrypt.hash(newPassword, 10);
+    user.password = hashed;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+
+    return res.json({ message: 'Password has been reset' });
+  } catch (err) {
+    console.error('Reset password error:', err);
+    return res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// Verify reset token and return associated email (used by frontend to prefill email)
+router.get('/verify-reset', async (req, res) => {
+  try {
+    const { token } = req.query || {};
+    if (!token) return res.status(400).json({ error: 'token is required' });
+
+    const user = await User.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: new Date() } });
+    if (!user) return res.status(400).json({ error: 'Invalid or expired token' });
+
+    return res.json({ email: user.email });
+  } catch (err) {
+    console.error('Verify reset token error:', err);
+    return res.status(500).json({ error: 'Failed to verify token' });
   }
 });
 
