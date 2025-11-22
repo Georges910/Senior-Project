@@ -57,23 +57,16 @@ export default function Login() {
         await AsyncStorage.setItem("jwtToken", data.token);
       }
 
-      // Fetch user profile after successful login with token
-      let profile: any = {};
-      if (data.token) {
-        const profileRes = await fetch(`${API_URL}/api/auth/profile`, {
-          headers: { Authorization: `Bearer ${data.token}` },
-        });
-        profile = await profileRes.json();
-        if (profile.fullName && profile.parish && profile.email) {
-          await AsyncStorage.setItem(
-            "userProfile",
-            JSON.stringify({
-              fullName: profile.fullName,
-              parish: profile.parish,
-              email: profile.email,
-            })
-          );
-        }
+      // Save user profile from login response (no extra API call needed)
+      if (data.user?.fullName && data.user?.parish && data.user?.email) {
+        await AsyncStorage.setItem(
+          "userProfile",
+          JSON.stringify({
+            fullName: data.user.fullName,
+            parish: data.user.parish,
+            email: data.user.email,
+          })
+        );
       }
 
       Alert.alert("Success", "Login successful");

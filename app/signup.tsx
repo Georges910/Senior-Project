@@ -32,15 +32,21 @@ export default function SignupScreen() {
   useEffect(() => {
     const fetchChurches = async () => {
       try {
+        console.log("Fetching churches from:", `${API_URL}/api/church/churches`);
         const res = await fetch(`${API_URL}/api/church/churches`);
         const data = await res.json();
+        console.log("Churches response:", data);
+        
         if (res.ok && data.churches) {
+          console.log("Churches loaded:", data.churches.length);
           setChurches(data.churches);
         } else {
           console.log("Failed to load churches:", data.error);
+          Alert.alert("Error", "Failed to load churches. Please check your connection.");
         }
       } catch (err) {
         console.error("Error fetching churches:", err);
+        Alert.alert("Error", "Could not connect to server to load churches.");
       }
     };
     fetchChurches();
@@ -200,9 +206,13 @@ export default function SignupScreen() {
                 backgroundColor: "transparent",
               }}
             >
-              <Picker.Item label="Select your parish" value="" color="#96a0b4" />
-              {churches.map((p) => (
-                <Picker.Item key={p.name} label={p.name} value={p.name} />
+              <Picker.Item 
+                label={churches.length === 0 ? "Loading churches..." : "Select your parish"} 
+                value="" 
+                color="#96a0b4" 
+              />
+              {churches.map((p, index) => (
+                <Picker.Item key={p.name || index} label={p.name} value={p.name} />
               ))}
             </Picker>
 

@@ -17,7 +17,7 @@ const BottomNav = ({ active }: { active: string }) => {
       {buttons.map((b) => (
         <TouchableOpacity
           key={b.name}
-          onPress={() => router.push(b.route as any)}
+          onPress={() => router.replace(b.route as any)}
           style={[styles.button, active === b.name && styles.activeButton]}
         >
           <Ionicons

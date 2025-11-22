@@ -1,10 +1,10 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { saveLike, fetchUserLikes } from './utils/recommend';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import {
   Dimensions,
   FlatList,
@@ -143,7 +143,7 @@ const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
   const isRTL = I18nManager.isRTL;
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [verse, setVerse] = useState<VerseOfDay | null>(null);
@@ -152,116 +152,66 @@ const HomeScreen: React.FC = () => {
   const [parishEvents, setParishEvents] = useState<EventItem[]>([]);
   const [otherEvents, setOtherEvents] = useState<EventItem[]>([]);
   const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async (force = false) => {
+    // Skip if already loaded and not forcing refresh
+    if (hasLoaded && !force) return;
+    
     setLoading(true);
     try {
+      // Use cached profile from AsyncStorage (set during login)
       let u: UserProfile | null = null;
-      const token = await AsyncStorage.getItem('jwtToken');
-      if (token) {
-        const profileRes = await fetch(`${API_URL}/api/auth/profile`, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (profileRes.ok) {
-          u = await profileRes.json();
-          await AsyncStorage.setItem('userProfile', JSON.stringify(u));
-        }
+      const stored = await AsyncStorage.getItem('userProfile');
+      if (stored) {
+        try { u = JSON.parse(stored); } catch {}
       }
 
-      const [v, p, e] = await Promise.all([
+      // Fetch all data in parallel (verse, prayers, churches)
+      const [v, p, churchesRes] = await Promise.all([
         Api.getVerseOfDay(),
         Api.getPrayerScheduleForSelectedChurch(),
-        Api.getRecommendedEvents(),
+        fetch(`${API_URL}/api/church/churches`).then(r => r.ok ? r.json() : { churches: [] }).catch(() => ({ churches: [] }))
       ]);
 
       setUser(u);
       setVerse(v);
       setPrayers(p);
-      setEvents(e);
 
-      // If server returned no events (maybe filtered by dates), try fetching raw churches
-      // and extract events directly as a fallback so the client can display them for debugging.
-      if ((!Array.isArray(e) || e.length === 0)) {
-        try {
-          const resCh = await fetch(`${API_URL}/api/church/churches`);
-          if (resCh.ok) {
-            const dataCh = await resCh.json();
-            const raw = dataCh?.churches || [];
-            const fallbackEvents: EventItem[] = [];
-            raw.forEach((churchDoc: any) => {
-              const chName = churchDoc.name || '';
-              const evs = Array.isArray(churchDoc.events) ? churchDoc.events : [];
-              evs.forEach((ev: any) => {
-                fallbackEvents.push({
-                  id: ev._id || ev.id || `${chName}-${Math.random()}`,
-                  title: ev.name || ev.title || '',
-                  parish: chName,
-                  location: ev.location || churchDoc.location || '',
-                  dateLabel: Array.isArray(ev.dates) ? ev.dates : (ev.date || ''),
-                  timeLabel: ev.timeFrom && ev.timeTo ? `${ev.timeFrom} - ${ev.timeTo}` : (ev.timeFrom || ev.timeTo || ''),
-                  imageUrl: ev.images?.[0] || ev.image || '',
-                });
-              });
-            });
-            if (fallbackEvents.length > 0) setEvents(fallbackEvents);
-          }
-        } catch (err) {
-          console.error('Fallback church events fetch failed:', err);
-        }
-      }
-
-      // derive parish-specific events from fetched events and user profile
-      try {
-        let parishName = u?.parish;
-        if (!parishName) {
-          const stored = await AsyncStorage.getItem('userProfile');
-          if (stored) {
-            try { const parsed = JSON.parse(stored); parishName = parsed?.parish || parishName; } catch {}
-          }
-        }
-        if (parishName) {
-          const matches = Array.isArray(e) ? e.filter(ev => ev.parish && String(ev.parish).toLowerCase().includes(String(parishName).toLowerCase())) : [];
-          setParishEvents(matches);
-        } else {
-          setParishEvents([]);
-        }
-      } catch (err) {
-        console.error('Error deriving parish events:', err);
-        setParishEvents([]);
-      }
-
-      // gather events from all churches to show 'other churches' events
-      try {
-        const resAll = await fetch(`${API_URL}/api/church/churches`);
-        if (resAll.ok) {
-          const dataAll = await resAll.json();
-          const raw = dataAll?.churches || [];
-          const extracted: EventItem[] = [];
-          raw.forEach((churchDoc: any) => {
-            const chName = churchDoc.name || '';
-            const evs = Array.isArray(churchDoc.events) ? churchDoc.events : [];
-            evs.forEach((ev: any) => {
-              extracted.push({
-                id: ev._id || ev.id || `${chName}-${Math.random()}`,
-                title: ev.name || ev.title || '',
-                parish: chName,
-                location: ev.location || churchDoc.location || '',
-                dateLabel: Array.isArray(ev.dates) ? ev.dates : (ev.date || ''),
-                timeLabel: ev.timeFrom && ev.timeTo ? `${ev.timeFrom} - ${ev.timeTo}` : (ev.timeFrom || ev.timeTo || ''),
-                imageUrl: ev.images?.[0] || ev.image || '',
-              });
-            });
+      // Extract all events from single churches fetch
+      const raw = churchesRes?.churches || [];
+      const allEvents: EventItem[] = [];
+      raw.forEach((churchDoc: any) => {
+        const chName = churchDoc.name || '';
+        const evs = Array.isArray(churchDoc.events) ? churchDoc.events : [];
+        evs.forEach((ev: any) => {
+          allEvents.push({
+            id: ev._id || ev.id || `${chName}-${Math.random()}`,
+            title: ev.name || ev.title || '',
+            parish: chName,
+            location: ev.location || churchDoc.location || '',
+            dateLabel: Array.isArray(ev.dates) ? ev.dates : (ev.date || ''),
+            timeLabel: ev.timeFrom && ev.timeTo ? `${ev.timeFrom} - ${ev.timeTo}` : (ev.timeFrom || ev.timeTo || ''),
+            imageUrl: ev.images?.[0] || ev.image || '',
           });
-          const parishNameLower = (u?.parish || '').toLowerCase();
-          const parishMatches = parishNameLower ? extracted.filter(ev => ev.parish && String(ev.parish).toLowerCase().includes(parishNameLower)) : [];
-          const others = extracted.filter(ev => !parishMatches.some(pm => String(pm.id) === String(ev.id)));
-          setOtherEvents(others);
-          // if original recommended events were empty, adopt extracted events as fallback
-          if ((!Array.isArray(e) || e.length === 0) && extracted.length > 0) setEvents(extracted);
-        }
-      } catch (err) {
-        console.error('Error extracting all church events:', err);
+        });
+      });
+
+      setEvents(allEvents);
+
+      // Derive parish-specific and other events from single list
+      const parishNameLower = (u?.parish || '').toLowerCase();
+      if (parishNameLower) {
+        const parishMatches = allEvents.filter(ev => ev.parish && String(ev.parish).toLowerCase().includes(parishNameLower));
+        const others = allEvents.filter(ev => !parishMatches.some(pm => String(pm.id) === String(ev.id)));
+        setParishEvents(parishMatches);
+        setOtherEvents(others);
+      } else {
+        setParishEvents([]);
+        setOtherEvents(allEvents);
       }
 
-      // load user likes if authenticated (simple list of liked event ids)
+      // Load user likes if authenticated
       try {
         const likes = await fetchUserLikes();
         const likedIds = Array.isArray(likes?.likedEvents) ? likes.likedEvents.map((id: any) => String(id)) : [];
@@ -274,8 +224,9 @@ const HomeScreen: React.FC = () => {
       console.error('Error in loadAll:', err);
     } finally {
       setLoading(false);
+      setHasLoaded(true);
     }
-  }, []);
+  }, [hasLoaded]);
 
   const router = useRouter();
   const handleLogout = async () => {
@@ -284,11 +235,11 @@ const HomeScreen: React.FC = () => {
     router.replace('/login');
   };
 
-  useFocusEffect(useCallback(() => { loadAll(); }, [loadAll]));
+  useEffect(() => { loadAll(); }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadAll();
+    await loadAll(true);
     setRefreshing(false);
   }, [loadAll]);
 
@@ -352,7 +303,13 @@ const HomeScreen: React.FC = () => {
           keyExtractor={(item) => item.id}
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: SCREEN_WIDTH * 0.04 }}
+          pagingEnabled={false}
+          snapToInterval={CARD_WIDTH + CARD_MARGIN}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          bounces={true}
+          scrollEventThrottle={16}
+          contentContainerStyle={{ paddingHorizontal: CARD_MARGIN }}
           ListEmptyComponent={loading ? <SkeletonEventCard /> : (
             <View style={{ padding: 12 }}>
               {user?.parish ? (
@@ -400,7 +357,10 @@ const HomeScreen: React.FC = () => {
           keyExtractor={(item) => item.id}
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: SCREEN_WIDTH * 0.04 }}
+          pagingEnabled
+          snapToInterval={CARD_WIDTH + CARD_MARGIN}
+          decelerationRate="fast"
+          contentContainerStyle={{ paddingHorizontal: CARD_MARGIN }}
           ListEmptyComponent={loading ? <SkeletonEventCard /> : (
             <View style={{ padding: 12 }}>
               <Text style={{ color: '#666' }}>No events from other churches right now.</Text>
