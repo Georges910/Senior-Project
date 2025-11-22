@@ -150,7 +150,6 @@ router.get("/churches", async (req, res) => {
   }
 });
 
-
 // === Delete specific church image ===
 router.delete("/:id/image", async (req, res) => {
   try {
