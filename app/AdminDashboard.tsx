@@ -39,6 +39,10 @@ const AdminDashboard = () => {
   const [newEventDates, setNewEventDates] = useState<string[]>([]);
   const [newEventTimeFrom, setNewEventTimeFrom] = useState("");
   const [newEventTimeTo, setNewEventTimeTo] = useState("");
+  const [newEventType, setNewEventType] = useState(""); // Event type for AI recommendations
+
+  // Event type options for picker (Arabic)
+  const eventTypes = ['معارض وحفلات', 'حديث روحي', 'أمسيات', 'حديث اجتماعي'];
 
   // generate next 7 days (starting tomorrow)
   const next7Days = Array.from({ length: 7 }, (_, i) => {
@@ -354,6 +358,25 @@ setAssignedChurches(data.churches || []);
 
               <TextInput style={styles.input} placeholder="Event Name" value={newEventName} onChangeText={setNewEventName} />
 
+              {/* Event Type Picker */}
+              <View style={styles.pickerContainer}>
+                <Picker
+                  selectedValue={newEventType}
+                  onValueChange={(val) => setNewEventType(val)}
+                  style={{ height: 40 }}
+                >
+                  <Picker.Item label="Select Event Type *" value="" />
+                  {eventTypes.map((type, i) => (
+                    <Picker.Item key={i} label={type} value={type} />
+                  ))}
+                </Picker>
+              </View>
+              {newEventType ? (
+                <Text style={{ fontSize: 12, color: '#27ae60', marginTop: -8, marginBottom: 8 }}>
+                  Type: {newEventType} ✅
+                </Text>
+              ) : null}
+
               {/* pick date and append to list */}
               <View style={styles.pickerContainer}>
                 <Picker
@@ -427,8 +450,8 @@ setAssignedChurches(data.churches || []);
               <TouchableOpacity
                 style={styles.addBtn}
                 onPress={async () => {
-                  if (!newEventName || newEventDates.length === 0 || !newEventTimeFrom || !newEventTimeTo) {
-                    Alert.alert("Please fill all event details");
+                  if (!newEventName || newEventDates.length === 0 || !newEventTimeFrom || !newEventTimeTo || !newEventType) {
+                    Alert.alert("Missing Information", "Please fill all event details including event type");
                     return;
                   }
                   const newEvent = {
@@ -438,6 +461,7 @@ setAssignedChurches(data.churches || []);
                     timeTo: newEventTimeTo,
                     location: church.location || "",
                     image: church.newEventImage || "",
+                    type: newEventType, // Include event type for AI recommendations
                   };
                   const updated = [...assignedChurches];
                   if (!updated[idx].events) updated[idx].events = [];
@@ -456,6 +480,7 @@ setAssignedChurches(data.churches || []);
                   setNewEventDates([]);
                   setNewEventTimeFrom("");
                   setNewEventTimeTo("");
+                  setNewEventType(""); // Reset event type
                   const reset = [...assignedChurches];
                   reset[idx].newEventImage = "";
                   setAssignedChurches(reset);

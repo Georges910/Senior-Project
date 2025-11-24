@@ -8,6 +8,12 @@ const EventSchema = new mongoose.Schema({
   timeTo: { type: String, required: true },   // end time
   location: { type: String, required: true },
   image: { type: String, default: "" },
+  type: { 
+    type: String, 
+    required: true,
+    enum: ['معارض وحفلات', 'حديث روحي', 'أمسيات', 'حديث اجتماعي'],
+    default: 'أمسيات'
+  }, // Event category for AI recommendations
 });
 
 // Updated Church Schema

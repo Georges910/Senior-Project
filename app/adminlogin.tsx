@@ -32,15 +32,21 @@ export default function AdminLogin() {
   useEffect(() => {
       const fetchChurches = async () => {
         try {
+          console.log('[AdminLogin] Fetching churches from:', `${API_URL}/api/church/churches`);
           const res = await fetch(`${API_URL}/api/church/churches`);
           const data = await res.json();
+          console.log('[AdminLogin] Churches response:', data);
+          
           if (res.ok && data.churches) {
+            console.log('[AdminLogin] Loaded churches:', data.churches.length);
             setChurches(data.churches);
           } else {
-            console.log("Failed to load churches:", data.error);
+            console.log('[AdminLogin] Failed to load churches:', data.error);
+            setErrorMsg(data.error || "Failed to load churches");
           }
         } catch (err) {
-          console.error("Error fetching churches:", err);
+          console.error('[AdminLogin] Error fetching churches:', err);
+          setErrorMsg("Could not connect to server to fetch churches");
         }
       };
       fetchChurches();
@@ -144,17 +150,34 @@ export default function AdminLogin() {
             <View style={{ flex: 1 }}>
               <Picker
                 selectedValue={church}
-                onValueChange={(itemValue) => setChurch(itemValue)}
+                onValueChange={(itemValue) => {
+                  console.log('[AdminLogin] Church selected:', itemValue);
+                  setChurch(itemValue);
+                }}
                 style={{ color: church ? "#222" : "#96a0b4" }}
                 dropdownIconColor="#58617a"
               >
                 <Picker.Item label="Select your parish" value="" color="#96a0b4" />
-                {churches.map((p, index) => (
-                  <Picker.Item key={index.toString()} label={p.name} value={p.name} />
-                ))}
+                {churches.length > 0 ? (
+                  churches.map((p, index) => (
+                    <Picker.Item key={p.name || index.toString()} label={p.name} value={p.name} />
+                  ))
+                ) : (
+                  <Picker.Item label="No churches available" value="" enabled={false} />
+                )}
               </Picker>
             </View>
           </View>
+          {churches.length === 0 && (
+            <Text style={{ fontSize: 12, color: '#ff6b6b', marginTop: 4, marginLeft: 36 }}>
+              No churches loaded. Please check server connection.
+            </Text>
+          )}
+          {churches.length > 0 && (
+            <Text style={{ fontSize: 12, color: '#27ae60', marginTop: 4, marginLeft: 36 }}>
+              {churches.length} church{churches.length !== 1 ? 'es' : ''} available
+            </Text>
+          )}
 
 
           {/* Password Input */}

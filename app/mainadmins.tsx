@@ -37,15 +37,21 @@ export default function AddAdmin() {
   useEffect(() => {
     const fetchChurches = async () => {
       try {
+        console.log('[MainAdmins] Fetching churches from:', `${API_URL}/api/church/churches`);
         const res = await fetch(`${API_URL}/api/church/churches`);
         const data = await res.json();
+        console.log('[MainAdmins] Churches response:', data);
+        
         if (res.ok && data.churches) {
+          console.log('[MainAdmins] Loaded churches:', data.churches.length);
           setChurches(data.churches);
         } else {
-          console.log("Failed to load churches:", data.error);
+          console.log('[MainAdmins] Failed to load churches:', data.error);
+          setChurchErrorMsg(data.error || "Failed to load churches");
         }
       } catch (err) {
-        console.error("Error fetching churches:", err);
+        console.error('[MainAdmins] Error fetching churches:', err);
+        setChurchErrorMsg("Could not connect to server to fetch churches");
       }
     };
     fetchChurches();
@@ -83,8 +89,21 @@ export default function AddAdmin() {
       setNewChurchName("");
       setNewChurchLocation("");
       setNewChurchAdmins("");
-      // refresh church list
-      setChurches((prev) => [...prev, { name: data.name }]);
+      
+      // Refresh church list from server to ensure consistency
+      console.log('[MainAdmins] Refreshing church list after add');
+      try {
+        const refreshRes = await fetch(`${API_URL}/api/church/churches`);
+        const refreshData = await refreshRes.json();
+        if (refreshRes.ok && refreshData.churches) {
+          console.log('[MainAdmins] Church list refreshed:', refreshData.churches.length);
+          setChurches(refreshData.churches);
+        }
+      } catch (refreshErr) {
+        console.log('[MainAdmins] Could not refresh church list, using local update');
+        // Fallback: add to local state
+        setChurches((prev) => [...prev, { name: data.church?.name || newChurchName }]);
+      }
     } catch (err) {
       setChurchErrorMsg("Could not connect to server");
     } finally {
@@ -180,6 +199,9 @@ export default function AddAdmin() {
           {churchSuccessMsg ? <Text style={styles.successText}>{churchSuccessMsg}</Text> : null}
           {churchErrorMsg ? <Text style={styles.errorText}>{churchErrorMsg}</Text> : null}
 
+          {/* Add Admin Section */}
+          <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Add an Admin</Text>
+          
           {/* Admin Info */}
           <View style={styles.inputRow}>
             <Ionicons name="person-outline" size={18} color="#58617a" style={styles.leftIcon} />
@@ -216,18 +238,35 @@ export default function AddAdmin() {
             <MaterialCommunityIcons name="church" size={18} color="#58617a" style={styles.leftIcon} />
             <Picker
               selectedValue={church}
-              onValueChange={(itemValue) => setChurch(itemValue)}
+              onValueChange={(itemValue) => {
+                console.log('[MainAdmins] Church selected:', itemValue);
+                setChurch(itemValue);
+              }}
               style={{
                 flex: 1,
                 color: church ? "#222" : "#96a0b4",
               }}
             >
               <Picker.Item label="Select Church" value="" color="#96a0b4" />
-              {churches.map((c) => (
-                <Picker.Item key={c.name} label={c.name} value={c.name} />
-              ))}
+              {churches.length > 0 ? (
+                churches.map((c, index) => (
+                  <Picker.Item key={c.name || index} label={c.name} value={c.name} />
+                ))
+              ) : (
+                <Picker.Item label="No churches available" value="" enabled={false} />
+              )}
             </Picker>
           </View>
+          {churches.length === 0 && (
+            <Text style={{ fontSize: 12, color: '#ff6b6b', marginTop: 4, marginLeft: 36 }}>
+              No churches loaded. Please add a church first or check server connection.
+            </Text>
+          )}
+          {churches.length > 0 && (
+            <Text style={{ fontSize: 12, color: '#27ae60', marginTop: 4, marginLeft: 36 }}>
+              {churches.length} church{churches.length !== 1 ? 'es' : ''} available
+            </Text>
+          )}
 
           <TouchableOpacity
             style={[styles.loginBtn, loading && { opacity: 0.7 }]}

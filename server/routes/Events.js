@@ -18,10 +18,15 @@ const upload = multer({ storage });
 
 // === Add new event ===
 router.post("/church/:id/event", upload.array("images", 10), async (req, res) => {
-  const { name, dates, timeFrom, timeTo, location } = req.body;
+  const { name, dates, timeFrom, timeTo, location, type } = req.body;
 
-  if (!name || !dates || !timeFrom || !timeTo || !location) {
-    return res.status(400).json({ error: "Please fill all required fields" });
+  if (!name || !dates || !timeFrom || !timeTo || !location || !type) {
+    return res.status(400).json({ error: "Please fill all required fields including event type" });
+  }
+
+  const validTypes = ['معارض وحفلات', 'حديث روحي', 'أمسيات', 'حديث اجتماعي'];
+  if (!validTypes.includes(type)) {
+    return res.status(400).json({ error: "Invalid event type. Must be one of: " + validTypes.join(', ') });
   }
 
   let parsedDates;
@@ -40,7 +45,7 @@ router.post("/church/:id/event", upload.array("images", 10), async (req, res) =>
     const church = await Church.findById(req.params.id);
     if (!church) return res.status(404).json({ error: "Church not found" });
 
-    const newEvent = { name, dates: parsedDates, timeFrom, timeTo, location, images };
+    const newEvent = { name, dates: parsedDates, timeFrom, timeTo, location, images, type };
     church.events.push(newEvent);
     await church.save();
 

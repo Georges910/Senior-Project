@@ -89,3 +89,23 @@ export async function fetchUserLikes() {
     throw err;
   }
 }
+
+// Fetch AI-powered recommendations (top 3 events)
+export async function fetchAIRecommendations() {
+  try {
+    const token = await AsyncStorage.getItem('jwtToken');
+    if (!token) throw new Error('Authentication required');
+    
+    const res = await fetch(`${API_URL}/api/recommendations`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to fetch recommendations');
+    }
+    return await res.json();
+  } catch (err) {
+    console.error('fetchAIRecommendations error', err);
+    throw err;
+  }
+}

@@ -1,6 +1,6 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { saveLike, fetchUserLikes } from './utils/recommend';
+import { saveLike, fetchUserLikes, fetchAIRecommendations } from './utils/recommend';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -151,8 +151,12 @@ const HomeScreen: React.FC = () => {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [parishEvents, setParishEvents] = useState<EventItem[]>([]);
   const [otherEvents, setOtherEvents] = useState<EventItem[]>([]);
+  const [aiRecommendations, setAiRecommendations] = useState<EventItem[]>([]);
   const [likedSet, setLikedSet] = useState<Set<string>>(new Set());
   const [hasLoaded, setHasLoaded] = useState(false);
+
+  // Memoize today's label to avoid recalculation on every render
+  const todayLabel = React.useMemo(() => Api.todayLabel(), []);
 
   const loadAll = useCallback(async (force = false) => {
     // Skip if already loaded and not forcing refresh
@@ -216,6 +220,24 @@ const HomeScreen: React.FC = () => {
         const likes = await fetchUserLikes();
         const likedIds = Array.isArray(likes?.likedEvents) ? likes.likedEvents.map((id: any) => String(id)) : [];
         setLikedSet(new Set(likedIds));
+        
+        // Fetch AI recommendations
+        try {
+          console.log('[AI Recommendations] Fetching recommendations...');
+          const recsData = await fetchAIRecommendations();
+          console.log('[AI Recommendations] Response:', recsData);
+          
+          if (recsData?.recommendations && Array.isArray(recsData.recommendations)) {
+            console.log('[AI Recommendations] Success! Found:', recsData.recommendations.length, 'events');
+            setAiRecommendations(recsData.recommendations);
+          } else {
+            console.log('[AI Recommendations] No recommendations in response');
+            setAiRecommendations([]);
+          }
+        } catch (recErr) {
+          console.error('[AI Recommendations] Error:', recErr);
+          setAiRecommendations([]);
+        }
       } catch (err) {
         // ignore if not logged in
       }
@@ -310,6 +332,10 @@ const HomeScreen: React.FC = () => {
           bounces={true}
           scrollEventThrottle={16}
           contentContainerStyle={{ paddingHorizontal: CARD_MARGIN }}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={3}
+          windowSize={5}
+          initialNumToRender={2}
           ListEmptyComponent={loading ? <SkeletonEventCard /> : (
             <View style={{ padding: 12 }}>
               {user?.parish ? (
@@ -350,50 +376,90 @@ const HomeScreen: React.FC = () => {
           )}
         />
 
-        {/* Other Churches Events */}
-        <SectionHeader title={isRTL ? 'الفعاليات المقترحة' : 'Recommended Events'} />
-        <FlatList
-          data={otherEvents}
-          keyExtractor={(item) => item.id}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          pagingEnabled
-          snapToInterval={CARD_WIDTH + CARD_MARGIN}
-          decelerationRate="fast"
-          contentContainerStyle={{ paddingHorizontal: CARD_MARGIN }}
-          ListEmptyComponent={loading ? <SkeletonEventCard /> : (
-            <View style={{ padding: 12 }}>
-              <Text style={{ color: '#666' }}>No events from other churches right now.</Text>
+        
+
+        {/* AI Recommendations - Top 3 Events */}
+        {aiRecommendations && aiRecommendations.length > 0 && (
+          <>
+            <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                <Ionicons name="sparkles" size={20} color="#F4C430" style={{ marginRight: 6 }} />
+                <Text style={[styles.sectionTitle, { fontSize: 15, fontWeight: '800' }]}>
+                  {isRTL ? 'توصيات الذكاء الاصطناعي' : 'AI Recommendations'}
+                </Text>
+              </View>
+              <Text style={{ fontSize: 11, color: '#666', marginLeft: 26 }}>
+                {isRTL ? 'مختارة خصيصًا لك بناءً على اهتماماتك' : 'Personalized picks based on your interests'}
+              </Text>
             </View>
-          )}
-          renderItem={({ item }) => (
-            <EventCard
-              item={item}
-              onPress={() => navigation.navigate('EventDetails', { id: item.id })}
-              liked={likedSet.has(String(item.id))}
-              onToggleLike={async () => {
-                const token = await AsyncStorage.getItem('jwtToken');
-                if (!token) { alert('Please login to like'); return; }
-                const id = String(item.id);
-                const isLiked = likedSet.has(id);
-                const prev = new Set(likedSet);
-                const next = new Set(likedSet);
-                if (isLiked) next.delete(id); else next.add(id);
-                setLikedSet(next);
-                try {
-                  await saveLike({ itemId: id, itemType: 'event', action: isLiked ? 'unlike' : 'like' });
-                  const likesRes = await fetchUserLikes();
-                  const likedIds = Array.isArray(likesRes?.likedEvents) ? likesRes.likedEvents.map((i: any) => String(i)) : [];
-                  setLikedSet(new Set(likedIds));
-                } catch (err) {
-                  console.error(err);
-                  setLikedSet(prev);
-                  alert('Failed to update like');
-                }
-              }}
+            <FlatList
+              data={aiRecommendations}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              pagingEnabled={false}
+              snapToInterval={CARD_WIDTH + CARD_MARGIN}
+              snapToAlignment="start"
+              decelerationRate="fast"
+              bounces={true}
+              scrollEventThrottle={16}
+              contentContainerStyle={{ paddingHorizontal: CARD_MARGIN }}
+              removeClippedSubviews={true}
+              maxToRenderPerBatch={3}
+              windowSize={5}
+              initialNumToRender={2}
+              ListEmptyComponent={
+                <View style={{ padding: 12 }}>
+                  <Text style={{ color: '#666' }}>No recommendations available yet.</Text>
+                </View>
+              }
+              renderItem={({ item }) => (
+                <EventCard
+                  item={item}
+                  onPress={() => navigation.navigate('EventDetails', { id: item.id })}
+                  liked={likedSet.has(String(item.id))}
+                  onToggleLike={async () => {
+                    const token = await AsyncStorage.getItem('jwtToken');
+                    if (!token) { alert('Please login to like'); return; }
+                    const id = String(item.id);
+                    const isLiked = likedSet.has(id);
+                    const prev = new Set(likedSet);
+                    const next = new Set(likedSet);
+                    if (isLiked) next.delete(id); else next.add(id);
+                    setLikedSet(next);
+                    try {
+                      await saveLike({ itemId: id, itemType: 'event', action: isLiked ? 'unlike' : 'like' });
+                      const likesRes = await fetchUserLikes();
+                      const likedIds = Array.isArray(likesRes?.likedEvents) ? likesRes.likedEvents.map((i: any) => String(i)) : [];
+                      setLikedSet(new Set(likedIds));
+                      // Refresh recommendations after liking
+                      const recsData = await fetchAIRecommendations();
+                      if (recsData?.recommendations) setAiRecommendations(recsData.recommendations);
+                    } catch (err) {
+                      console.error(err);
+                      setLikedSet(prev);
+                      alert('Failed to update like');
+                    }
+                  }}
+                />
+              )}
             />
-          )}
-        />
+          </>
+        )}
+        
+        {(!aiRecommendations || aiRecommendations.length === 0) && (
+          <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+              <Ionicons name="sparkles-outline" size={18} color="#999" style={{ marginRight: 6 }} />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#666' }}>
+                {isRTL ? 'توصيات الذكاء الاصطناعي' : 'AI Recommendations'}
+              </Text>
+            </View>
+            <Text style={{ fontSize: 12, color: '#999', marginLeft: 24 }}>
+              {isRTL ? 'لا توجد توصيات متاحة حاليًا. قم بالإعجاب بالمزيد من الفعاليات للحصول على اقتراحات مخصصة!' : 'No recommendations available yet. Like more events to get personalized suggestions!'}
+            </Text>
+          </View>
+        )}
 
         <View style={{ height: 80 }} />
       </ScrollView>
@@ -425,7 +491,8 @@ const SkeletonPrayerList = () => (
 
 const SkeletonEventCard = () => <View style={[styles.eventCard, { backgroundColor: '#eee' }]} />;
 
-const EventCard: React.FC<{ item: EventItem; onPress: () => void; liked?: boolean; onToggleLike?: () => void }> = ({ item, onPress, liked, onToggleLike }) => {
+const EventCard = React.memo<{ item: EventItem; onPress: () => void; liked?: boolean; onToggleLike?: () => void }>(
+  ({ item, onPress, liked, onToggleLike }) => {
   const openMap = () => {
     if (item.location) {
       const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`;
@@ -436,7 +503,12 @@ const EventCard: React.FC<{ item: EventItem; onPress: () => void; liked?: boolea
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={styles.eventCard}>
       {item.imageUrl ? (
-        <Image source={{ uri: item.imageUrl }} style={styles.eventImage} resizeMode="cover" />
+        <Image 
+          source={{ uri: item.imageUrl, cache: 'force-cache' }} 
+          style={styles.eventImage} 
+          resizeMode="cover"
+          fadeDuration={200}
+        />
       ) : null}
       <View style={styles.eventDetails}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -457,7 +529,13 @@ const EventCard: React.FC<{ item: EventItem; onPress: () => void; liked?: boolea
       </View>
     </TouchableOpacity>
   );
-};
+},
+(prevProps, nextProps) => {
+  // Only re-render if these props actually changed
+  return prevProps.item.id === nextProps.item.id &&
+         prevProps.liked === nextProps.liked &&
+         prevProps.item.imageUrl === nextProps.item.imageUrl;
+});
 
 // ---------- Styles ----------
 const COLORS = { bg: '#f7f9fb', card: '#fff', primary: '#173B65', accent: '#1F7BC7', textDark: '#0b2239', textDim: '#5e6c79' };
