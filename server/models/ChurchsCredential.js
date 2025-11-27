@@ -11,8 +11,8 @@ const EventSchema = new mongoose.Schema({
   type: { 
     type: String, 
     required: true,
-    enum: ['معارض وحفلات', 'حديث روحي', 'أمسيات', 'حديث اجتماعي'],
-    default: 'أمسيات'
+    enum: ['معارض وحفلات', 'حديث روحي', 'أمسيات', 'حديث اجتماعي', 'أفلام روحية'],
+    default: 'معارض وحفلات'
   }, // Event category for AI recommendations
 });
 

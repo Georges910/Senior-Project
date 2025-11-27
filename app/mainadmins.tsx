@@ -14,7 +14,7 @@ import {
 } from "react-native";
 
 const API_URL = "http://localhost:3000"; 
-//const API_URL = "http://10.24.113.128:3000"
+//const API_URL = 'http://10.65.189.128:3000';
 
 export default function AddAdmin() {
   const router = useRouter();

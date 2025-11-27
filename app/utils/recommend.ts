@@ -1,4 +1,5 @@
 const API_URL = 'http://localhost:3000';
+//const API_URL = "http://10.65.189.128:3000"
 
 export async function getRecommendations(ratings: Array<{ name: string; rating: number }>, topK = 5) {
   try {

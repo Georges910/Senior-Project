@@ -19,7 +19,7 @@ import { launchImageLibrary } from "react-native-image-picker";
 import { getAdminProfile } from "./utils/getAdminProfile";
 
 const API_URL = "http://localhost:3000";
-//const API_URL = "http://10.24.113.128:3000"
+//const API_URL = "http://10.65.189.128:3000"
 const prayers = ["صلاة نصف الليل", "صلاة السحر", "القداس الالهي", "الساعة الأولى", "الساعة الثالثة", "الساعة السادسة", "الساعة التاسعة", "صلاة الغروب", "صلاة النوم الكبرى", "صلاة المديح", "صلاة السجدة", "القداس السابق تقديسه"];
 
 const AdminDashboard = () => {
@@ -42,7 +42,7 @@ const AdminDashboard = () => {
   const [newEventType, setNewEventType] = useState(""); // Event type for AI recommendations
 
   // Event type options for picker (Arabic)
-  const eventTypes = ['معارض وحفلات', 'حديث روحي', 'أمسيات', 'حديث اجتماعي'];
+  const eventTypes = ['معارض وحفلات', 'حديث روحي', 'أمسيات', 'حديث اجتماعي', 'أفلام روحية'];
 
   // generate next 7 days (starting tomorrow)
   const next7Days = Array.from({ length: 7 }, (_, i) => {

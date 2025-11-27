@@ -10,7 +10,7 @@ export default function RecommendationsScreen() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<any[]>([]);
   const [userId, setUserId] = useState<string | undefined>(undefined);
-
+  
   useEffect(() => {
     (async () => {
       try {

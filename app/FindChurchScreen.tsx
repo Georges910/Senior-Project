@@ -66,6 +66,7 @@ const FindChurchScreen = () => {
     const fetchChurches = async () => {
       try {
         const API_URL = "http://localhost:3000";
+        //const API_URL = "http://10.65.189.128:3000";
         const res = await fetch(`${API_URL}/api/church/churches`);
         const data = await res.json();
         if (Array.isArray(data.churches)) {

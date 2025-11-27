@@ -24,7 +24,7 @@ router.post("/church/:id/event", upload.array("images", 10), async (req, res) =>
     return res.status(400).json({ error: "Please fill all required fields including event type" });
   }
 
-  const validTypes = ['معارض وحفلات', 'حديث روحي', 'أمسيات', 'حديث اجتماعي'];
+  const validTypes = ['معارض وحفلات', 'حديث روحي', 'أمسيات', 'حديث اجتماعي', 'أفلام روحية'];
   if (!validTypes.includes(type)) {
     return res.status(400).json({ error: "Invalid event type. Must be one of: " + validTypes.join(', ') });
   }

@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingVi
 import { useRouter, useLocalSearchParams } from 'expo-router';
 
 const API_URL = 'http://localhost:3000';
+//const API_URL = "http://10.65.189.128:3000"
 
 export default function ResetPasswordPage() {
   const router = useRouter();

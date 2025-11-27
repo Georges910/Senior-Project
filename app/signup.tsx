@@ -8,7 +8,7 @@ import { useRouter } from "expo-router";
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
 
-//const API_URL = "http://10.24.113.128:3000"
+//const API_URL = "http://10.65.189.128:3000"
 const API_URL = "http://localhost:3000";
 
 export default function SignupScreen() {
