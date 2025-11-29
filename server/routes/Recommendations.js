@@ -67,6 +67,65 @@ function calculateEventScore(event, userLikedEventIds, userParish, allUsers, use
   }
 
   // ===================================================================
+  // STEP 2.5: CHURCH/LOCATION PREFERENCE - Learn favorite churches
+  // ===================================================================
+  // Analyze which churches the user tends to like events from
+  // If user frequently likes events from specific churches, boost those
+  if (event.church && userLikedEventIds.length > 0 && allEvents.length > 0) {
+    const userLikedEvents = allEvents.filter(e => userLikedEventIds.includes(String(e._id)));
+    const churchCount = {};
+    
+    userLikedEvents.forEach(e => {
+      if (e.church) {
+        const churchName = String(e.church).toLowerCase();
+        churchCount[churchName] = (churchCount[churchName] || 0) + 1;
+      }
+    });
+    
+    // Check if user has liked events from this church before
+    const eventChurchName = String(event.church).toLowerCase();
+    if (churchCount[eventChurchName]) {
+      const frequency = churchCount[eventChurchName] / userLikedEvents.length; // 0 to 1
+      score += frequency * 50; // Up to 50 points for preferred churches
+      console.log(`[AI] Church preference boost: ${event.church} (+${(frequency * 50).toFixed(1)} points)`);
+    }
+  }
+
+  // ===================================================================
+  // STEP 2.7: TIME PATTERN PREFERENCE - Learn preferred event times
+  // ===================================================================
+  // Analyze what time of day the user prefers events (morning, afternoon, evening)
+  if (event.timeFrom && userLikedEventIds.length > 0 && allEvents.length > 0) {
+    const userLikedEvents = allEvents.filter(e => userLikedEventIds.includes(String(e._id)));
+    
+    // Categorize times: morning (6-12), afternoon (12-17), evening (17-22), night (22-6)
+    const getTimeCategory = (timeStr) => {
+      if (!timeStr) return null;
+      const hour = parseInt(timeStr.split(':')[0]);
+      if (hour >= 6 && hour < 12) return 'morning';
+      if (hour >= 12 && hour < 17) return 'afternoon';
+      if (hour >= 17 && hour < 22) return 'evening';
+      return 'night';
+    };
+    
+    const timeCategoryCount = {};
+    userLikedEvents.forEach(e => {
+      const category = getTimeCategory(e.timeFrom);
+      if (category) {
+        timeCategoryCount[category] = (timeCategoryCount[category] || 0) + 1;
+      }
+    });
+    
+    // Check if current event matches user's preferred time
+    const eventTimeCategory = getTimeCategory(event.timeFrom);
+    if (eventTimeCategory && timeCategoryCount[eventTimeCategory]) {
+      const frequency = timeCategoryCount[eventTimeCategory] / userLikedEvents.length;
+      score += frequency * 40; // Up to 40 points for preferred time slots
+      console.log(`[AI] Time preference boost: ${eventTimeCategory} (+${(frequency * 40).toFixed(1)} points)`);
+    }
+  }
+
+  // ===================================================================
   // STEP 3: COLLABORATIVE FILTERING - Find users with similar taste
   // ===================================================================
   // This is the core AI component. We find users who liked similar events,
@@ -193,7 +252,9 @@ function calculateEventScore(event, userLikedEventIds, userParish, allUsers, use
   // RETURN FINAL SCORE
   // ===================================================================
   // Total score is the sum of all components:
-  // - Event type preference: 0-80 points (based on user's type history)
+  // - Event type preference: 0-80 points (learns user's favorite event types)
+  // - Church preference: 0-50 points (learns user's favorite churches/locations)
+  // - Time preference: 0-40 points (learns preferred time of day: morning/afternoon/evening)
   // - Collaborative filtering: 0-100+ points (depends on user similarity)
   // - Popularity: 15 points per like
   // - Parish match: 60 points
@@ -313,12 +374,28 @@ router.get('/', authenticate, async (req, res) => {
     });
 
     // ===================================================================
-    // STEP 4: Filter out already-liked events
+    // STEP 4: Filter out already-liked events and own parish events
     // ===================================================================
     // Don't recommend events the user has already interacted with
-    const candidateEvents = allEvents.filter(ev => !userLikedEventIds.includes(String(ev._id)));
+    // Also exclude events from the user's own parish (only show other parishes)
+    const candidateEvents = allEvents.filter(ev => {
+      // Exclude already liked events
+      if (userLikedEventIds.includes(String(ev._id))) return false;
+      
+      // Exclude events from user's own parish - only recommend other parishes
+      if (userParish && ev.church) {
+        const eventChurch = String(ev.church).toLowerCase().trim();
+        const userChurch = String(userParish).toLowerCase().trim();
+        if (eventChurch === userChurch || eventChurch.includes(userChurch) || userChurch.includes(eventChurch)) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
     console.log('[AI Recommendations] Total events:', allEvents.length);
-    console.log('[AI Recommendations] Candidate events:', candidateEvents.length);
+    console.log('[AI Recommendations] User parish:', userParish);
+    console.log('[AI Recommendations] Candidate events (other parishes only):', candidateEvents.length);
 
     // ===================================================================
     // STEP 5: Fetch all users for collaborative filtering
@@ -418,7 +495,9 @@ router.get('/debug/:email', async (req, res) => {
             name: event.name,
             church: church.name,
             dates: event.dates,
-            type: event.type // Include type for analysis
+            type: event.type, // Include type for analysis
+            timeFrom: event.timeFrom, // Include time for time preference analysis
+            timeTo: event.timeTo
           });
         });
       }
@@ -436,6 +515,37 @@ router.get('/debug/:email', async (req, res) => {
     // Sort by score (highest first)
     scoredEvents.sort((a, b) => b.score - a.score);
 
+    // Analyze user's learned preferences for debugging
+    const userLikedEvents = allEvents.filter(e => userLikedEventIds.includes(String(e._id)));
+    
+    // Calculate type preferences
+    const typePreferences = {};
+    userLikedEvents.forEach(e => {
+      if (e.type) typePreferences[e.type] = (typePreferences[e.type] || 0) + 1;
+    });
+    
+    // Calculate church preferences
+    const churchPreferences = {};
+    userLikedEvents.forEach(e => {
+      if (e.church) churchPreferences[e.church] = (churchPreferences[e.church] || 0) + 1;
+    });
+    
+    // Calculate time preferences
+    const getTimeCategory = (timeStr) => {
+      if (!timeStr) return null;
+      const hour = parseInt(timeStr.split(':')[0]);
+      if (hour >= 6 && hour < 12) return 'morning';
+      if (hour >= 12 && hour < 17) return 'afternoon';
+      if (hour >= 17 && hour < 22) return 'evening';
+      return 'night';
+    };
+    
+    const timePreferences = {};
+    userLikedEvents.forEach(e => {
+      const category = getTimeCategory(e.timeFrom);
+      if (category) timePreferences[category] = (timePreferences[category] || 0) + 1;
+    });
+
     // Return detailed debugging information
     return res.json({
       user: {
@@ -443,6 +553,11 @@ router.get('/debug/:email', async (req, res) => {
         parish: user.parish,
         likedCount: userLikedEventIds.length,
         likedEventIds: userLikedEventIds
+      },
+      learnedPreferences: {
+        eventTypes: typePreferences,
+        churches: churchPreferences,
+        timeSlots: timePreferences
       },
       stats: {
         totalUsers: allUsers.length,
@@ -452,7 +567,9 @@ router.get('/debug/:email', async (req, res) => {
       top10: scoredEvents.slice(0, 10).map(item => ({
         title: item.event.name,
         church: item.event.church,
-        score: item.score,
+        type: item.event.type,
+        time: item.event.timeFrom,
+        score: item.score.toFixed(2),
         id: item.event._id
       }))
     });

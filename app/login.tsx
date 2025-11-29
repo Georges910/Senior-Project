@@ -154,7 +154,7 @@ export default function Login() {
           </View>
 
           {/* Forgot password */}
-          <TouchableOpacity style={{ alignSelf: "center", marginTop: 10 }} onPress={() => router.push('/forgepassword')}>
+          <TouchableOpacity style={{ alignSelf: "center", marginTop: 10 }} onPress={() => router.push({ pathname: '/forgepassword', params: { email } })}>
             <Text style={styles.forgot}>Forgot Password?</Text>
           </TouchableOpacity>
 

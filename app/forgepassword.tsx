@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 
 const API_URL = 'http://localhost:3000';
 //const API_URL = 'http://10.65.189.128:3000';
@@ -20,10 +20,18 @@ const API_URL = 'http://localhost:3000';
 
 export default function ForgePassword() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
+  const params = useLocalSearchParams();
+  const [email, setEmail] = useState(params.email as string || '');
   const [loading, setLoading] = useState(false);
   const [sentMessage, setSentMessage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // Automatically send reset email when email is provided via params
+  useEffect(() => {
+    if (params.email && !sentMessage && !loading) {
+      requestReset();
+    }
+  }, []); // Run only once on mount
 
   const requestReset = async () => {
     if (!email) { setErrorMessage('Please enter your email to receive reset instructions.'); return; }
