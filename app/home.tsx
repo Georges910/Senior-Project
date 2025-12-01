@@ -139,6 +139,32 @@ const formatDate = (dateStr: string) => {
   });
 };
 
+const getEventDate = (ev: EventItem) => {
+  if (!ev.dateLabel) return new Date(); // fallback to now
+  if (Array.isArray(ev.dateLabel)) return new Date(ev.dateLabel[0]);
+  return new Date(ev.dateLabel);
+};
+
+// Parse time string "17:30" or "5:30 PM" to minutes from 00:00
+const getTimeMinutes = (timeStr: string) => {
+  if (!timeStr) return 0;
+  const pm = timeStr.toLowerCase().includes('pm');
+  const parts = timeStr.replace(/am|pm/i, '').split(':').map(Number);
+  if (parts.length < 2) return 0;
+  let hours = parts[0];
+  const minutes = parts[1] || 0;
+  if (pm && hours < 12) hours += 12;
+  if (!pm && hours === 12) hours = 0;
+  return hours * 60 + minutes;
+};
+
+// Get earliest start time from timeLabel like "17:30 - 18:30" or "5:30 PM - 6 PM"
+const getEventStartMinutes = (ev: EventItem) => {
+  if (!ev.timeLabel) return 0;
+  const start = ev.timeLabel.split('-')[0].trim();
+  return getTimeMinutes(start);
+};
+
 // ---------- HomeScreen ----------
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -162,14 +188,14 @@ const HomeScreen: React.FC = () => {
   const loadAll = useCallback(async (force = false) => {
     // Skip if already loaded and not forcing refresh
     if (hasLoaded && !force) return;
-    
+
     setLoading(true);
     try {
       // Use cached profile from AsyncStorage (set during login)
       let u: UserProfile | null = null;
       const stored = await AsyncStorage.getItem('userProfile');
       if (stored) {
-        try { u = JSON.parse(stored); } catch {}
+        try { u = JSON.parse(stored); } catch { }
       }
 
       // Fetch all data in parallel (verse, prayers, churches)
@@ -186,6 +212,19 @@ const HomeScreen: React.FC = () => {
       // Extract all events from single churches fetch
       const raw = churchesRes?.churches || [];
       const allEvents: EventItem[] = [];
+      // sort all events by date ascending
+      const sortedAllEvents = allEvents.sort((a, b) => {
+        const dateA = getEventDate(a);
+        const dateB = getEventDate(b);
+
+        // Compare date first
+        if (dateA.getTime() !== dateB.getTime()) return dateA.getTime() - dateB.getTime();
+
+        // If same day, compare start time
+        return getEventStartMinutes(a) - getEventStartMinutes(b);
+      });
+
+      setEvents(sortedAllEvents);
       raw.forEach((churchDoc: any) => {
         const chName = churchDoc.name || '';
         const evs = Array.isArray(churchDoc.events) ? churchDoc.events : [];
@@ -207,8 +246,44 @@ const HomeScreen: React.FC = () => {
       // Derive parish-specific and other events from single list
       const parishNameLower = (u?.parish || '').toLowerCase();
       if (parishNameLower) {
-        const parishMatches = allEvents.filter(ev => ev.parish && String(ev.parish).toLowerCase().includes(parishNameLower));
+        const isUpcoming = (dateStr: string) => {
+          if (!dateStr) return false;
+          const eventDate = new Date(dateStr);
+          const today = new Date();
+          return eventDate >= today;
+        };
+
+        const isUpcomingAny = (dates: string | string[]) => {
+          if (Array.isArray(dates)) return dates.some(d => isUpcoming(d));
+          return isUpcoming(dates);
+        };
+
+        const parishMatches = allEvents.filter(ev =>
+          ev.parish?.toLowerCase().includes(parishNameLower) &&
+          isUpcomingAny(ev.dateLabel)
+        );
+
         const others = allEvents.filter(ev => !parishMatches.some(pm => String(pm.id) === String(ev.id)));
+
+        setParishEvents(
+          parishMatches.sort((a, b) => {
+            const dA = getEventDate(a);
+            const dB = getEventDate(b);
+            if (dA.getTime() !== dB.getTime()) return dA.getTime() - dB.getTime();
+            return getEventStartMinutes(a) - getEventStartMinutes(b);
+          })
+        );
+
+        setOtherEvents(
+          others.sort((a, b) => {
+            const dA = getEventDate(a);
+            const dB = getEventDate(b);
+            if (dA.getTime() !== dB.getTime()) return dA.getTime() - dB.getTime();
+            return getEventStartMinutes(a) - getEventStartMinutes(b);
+          })
+        );
+
+
         setParishEvents(parishMatches);
         setOtherEvents(others);
       } else {
@@ -221,13 +296,13 @@ const HomeScreen: React.FC = () => {
         const likes = await fetchUserLikes();
         const likedIds = Array.isArray(likes?.likedEvents) ? likes.likedEvents.map((id: any) => String(id)) : [];
         setLikedSet(new Set(likedIds));
-        
+
         // Fetch AI recommendations
         try {
           console.log('[AI Recommendations] Fetching recommendations...');
           const recsData = await fetchAIRecommendations();
           console.log('[AI Recommendations] Response:', recsData);
-          
+
           if (recsData?.recommendations && Array.isArray(recsData.recommendations)) {
             console.log('[AI Recommendations] Success! Found:', recsData.recommendations.length, 'events');
             setAiRecommendations(recsData.recommendations);
@@ -361,13 +436,13 @@ const HomeScreen: React.FC = () => {
                 const next = new Set(likedSet);
                 if (isLiked) next.delete(id); else next.add(id);
                 setLikedSet(next);
-                  try {
-                    await saveLike({ itemId: id, itemType: 'event', action: isLiked ? 'unlike' : 'like' });
-                    // refresh authoritative likes (server returns { likedEvents: [ids] })
-                    const likesRes = await fetchUserLikes();
-                    const likedIds = Array.isArray(likesRes?.likedEvents) ? likesRes.likedEvents.map((i: any) => String(i)) : [];
-                    setLikedSet(new Set(likedIds));
-                  } catch (err) {
+                try {
+                  await saveLike({ itemId: id, itemType: 'event', action: isLiked ? 'unlike' : 'like' });
+                  // refresh authoritative likes (server returns { likedEvents: [ids] })
+                  const likesRes = await fetchUserLikes();
+                  const likedIds = Array.isArray(likesRes?.likedEvents) ? likesRes.likedEvents.map((i: any) => String(i)) : [];
+                  setLikedSet(new Set(likedIds));
+                } catch (err) {
                   console.error(err);
                   setLikedSet(prev); // revert
                   alert('Failed to update like');
@@ -377,7 +452,7 @@ const HomeScreen: React.FC = () => {
           )}
         />
 
-        
+
 
         {/* AI Recommendations - Top 3 Events */}
         {aiRecommendations && aiRecommendations.length > 0 && (
@@ -447,12 +522,11 @@ const HomeScreen: React.FC = () => {
             />
           </>
         )}
-        
+
         {(!aiRecommendations || aiRecommendations.length === 0) && (
           <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-              <Ionicons name="sparkles-outline" size={18} color="#999" style={{ marginRight: 6 }} />
-              <Text style={{ fontSize: 13, fontWeight: '600', color: '#666' }}>
+              <Text style={{ fontSize: 13, fontWeight: '500', color: '#000000ff' }}>
                 {isRTL ? 'توصيات الذكاء الاصطناعي' : 'AI Recommendations'}
               </Text>
             </View>
@@ -494,49 +568,49 @@ const SkeletonEventCard = () => <View style={[styles.eventCard, { backgroundColo
 
 const EventCard = React.memo<{ item: EventItem; onPress: () => void; liked?: boolean; onToggleLike?: () => void }>(
   ({ item, onPress, liked, onToggleLike }) => {
-  const openMap = () => {
-    if (item.location) {
-      const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`;
-      Linking.openURL(url);
-    }
-  };
+    const openMap = () => {
+      if (item.location) {
+        const url = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.location)}`;
+        Linking.openURL(url);
+      }
+    };
 
-  return (
-    <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={styles.eventCard}>
-      {item.imageUrl ? (
-        <Image 
-          source={{ uri: item.imageUrl, cache: 'force-cache' }} 
-          style={styles.eventImage} 
-          resizeMode="cover"
-          fadeDuration={200}
-        />
-      ) : null}
-      <View style={styles.eventDetails}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={styles.eventTitle}>{item.title}</Text>
-          <TouchableOpacity onPress={onToggleLike} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name={liked ? 'heart' : 'heart-outline'} size={18} color={liked ? '#e74c3c' : '#333'} />
+    return (
+      <TouchableOpacity onPress={onPress} activeOpacity={0.9} style={styles.eventCard}>
+        {item.imageUrl ? (
+          <Image
+            source={{ uri: item.imageUrl, cache: 'force-cache' }}
+            style={styles.eventImage}
+            resizeMode="contain"
+            fadeDuration={200}
+          />
+        ) : null}
+        <View style={styles.eventDetails}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={styles.eventTitle}>{item.title}</Text>
+            <TouchableOpacity onPress={onToggleLike} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name={liked ? 'heart' : 'heart-outline'} size={18} color={liked ? '#e74c3c' : '#333'} />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.eventText}>
+            {Array.isArray(item.dateLabel)
+              ? item.dateLabel.map(d => formatDate(d)).join(" - ")
+              : formatDate(item.dateLabel)}
+          </Text>
+          <Text style={styles.eventText}>{item.timeLabel}</Text>
+          <TouchableOpacity onPress={openMap} activeOpacity={0.7}>
+            <Text style={styles.eventMeta}>{item.parish}</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.eventText}>
-          {Array.isArray(item.dateLabel)
-            ? item.dateLabel.map(d => formatDate(d)).join(" - ")
-            : formatDate(item.dateLabel)}
-        </Text>
-        <Text style={styles.eventText}>{item.timeLabel}</Text>
-        <TouchableOpacity onPress={openMap} activeOpacity={0.7}>
-          <Text style={styles.eventMeta}>{item.parish}</Text>
-        </TouchableOpacity>
-      </View>
-    </TouchableOpacity>
-  );
-},
-(prevProps, nextProps) => {
-  // Only re-render if these props actually changed
-  return prevProps.item.id === nextProps.item.id &&
-         prevProps.liked === nextProps.liked &&
-         prevProps.item.imageUrl === nextProps.item.imageUrl;
-});
+      </TouchableOpacity>
+    );
+  },
+  (prevProps, nextProps) => {
+    // Only re-render if these props actually changed
+    return prevProps.item.id === nextProps.item.id &&
+      prevProps.liked === nextProps.liked &&
+      prevProps.item.imageUrl === nextProps.item.imageUrl;
+  });
 
 // ---------- Styles ----------
 const COLORS = { bg: '#f7f9fb', card: '#fff', primary: '#173B65', accent: '#1F7BC7', textDark: '#0b2239', textDim: '#5e6c79' };
@@ -554,9 +628,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     minHeight: 230,
   },
+
   eventImage: {
     width: '100%',
     height: 160,
+    backgroundColor: "#f7f7f7",
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
   },
@@ -568,7 +644,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#173B65',
-    marginBottom: 4,
+    margin: 5,
+
   },
   eventText: {
     fontSize: 13,

@@ -4,9 +4,13 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   FlatList, Image, Linking,
   Modal, Platform, ScrollView, StyleSheet, Text, TextInput,
-  TouchableOpacity, View
+  TouchableOpacity, View,Dimensions
 } from "react-native";
 import BottomNav from "./Components/BottomNav";
+
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const baseScale = SCREEN_WIDTH / 375;
+const rsize = (size: number) => Math.round(size * baseScale);
 
 // ---------- Date Formatter ----------
 const formatDate = (dateStr: string) => {
@@ -241,7 +245,12 @@ const FindChurchScreen = () => {
       .filter(isUpcomingEvent)
       .map((ev: any, idx: number) => (
         <View key={idx} style={styles.eventCardModal}>
-          {ev.image && <Image source={{ uri: ev.image }} style={styles.eventImageModal} />}
+          {ev.image && <View style={styles.eventImageModal}>
+      <Image
+        source={{ uri: ev.image }}
+        style={{ width: "100%", height: "100%", resizeMode: "contain" }}
+      />
+    </View>}
           <View style={styles.eventDetailsModal}>
             <Text style={styles.eventTitleModal}>{ev.name}</Text>
             <Text style={styles.eventTextModal}>
@@ -310,7 +319,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#eaeaea",
   },
   cardContent: { flex: 1, padding: 10 },
-  cardTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 10, color: "#173B65" },
+  cardTitle: { fontSize: rsize(12), fontWeight: "bold", marginBottom: 10, color: "#173B65" },
   detailButton: {
     backgroundColor: "#173B65",
     borderRadius: 6,
@@ -339,7 +348,7 @@ const styles = StyleSheet.create({
   },
   backButton: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
   modalTitle: {
-    fontSize: 20,
+    fontSize: rsize(12),
     fontWeight: "700",
     color: "#173B65",
     marginBottom: 6,
@@ -409,6 +418,10 @@ const styles = StyleSheet.create({
     height: 140,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
+    backgroundColor: "#f7f7f7",
+  overflow: "hidden",          
+  justifyContent: "center",  
+  alignItems: "center",
   },
   eventDetailsModal: { paddingHorizontal: 12, paddingVertical: 10 },
   eventTitleModal: {
