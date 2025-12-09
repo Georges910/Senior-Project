@@ -308,7 +308,7 @@ backText: {
   inputRow: { width: "86%", flexDirection: "row", alignItems: "center", borderColor: "#4b5a79", borderWidth: 1.2, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 28, marginTop: 12, backgroundColor: "#fff" },
   leftIcon: { marginRight: 8 },
   input: { flex: 1, fontSize: 15, color: "#222" },
-  loginBtn: { width: "86%", marginTop: 18, backgroundColor: "#0b2b52", paddingVertical: 14, borderRadius: 24, alignItems: "center", borderWidth: 2, borderColor: "#e7ecf6" },
+  loginBtn: { width: "86%", marginTop: 18, backgroundColor: "#173B65", paddingVertical: 14, borderRadius: 24, alignItems: "center", borderWidth: 2, borderColor: "#e7ecf6" },
   loginText: { color: "#fff", fontWeight: "700", fontSize: 16 },
   sectionTitle: { color: "#173B65", fontWeight: "bold", fontSize: 18, marginBottom: 8 },
   successText: { color: "green", marginTop: 8, textAlign: "center", fontSize: 13 },

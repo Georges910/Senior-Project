@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   sheet: { flexGrow: 1, backgroundColor: '#fff', marginTop: 16, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 20, paddingBottom: 34, alignItems: 'center' },
   inputRow: { width: '86%', flexDirection: 'row', alignItems: 'center', borderColor: '#4b5a79', borderWidth: 1.2, paddingHorizontal: 14, paddingVertical: 12, borderRadius: 28, marginTop: 12, backgroundColor: '#fff' },
   input: { flex: 1, fontSize: 15, color: '#222' },
-  loginBtn: { width: '86%', marginTop: 18, backgroundColor: '#0b2b52', paddingVertical: 14, borderRadius: 24, alignItems: 'center', borderWidth: 2, borderColor: '#e7ecf6' },
+  loginBtn: { width: '86%', marginTop: 18, backgroundColor: '#173B65', paddingVertical: 14, borderRadius: 24, alignItems: 'center', borderWidth: 2, borderColor: '#e7ecf6' },
   loginText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   errorBox: { marginTop: 12, width: '86%', padding: 10, backgroundColor: '#ffecec', borderRadius: 10 },
   errorText: { color: '#9b2c2c' },

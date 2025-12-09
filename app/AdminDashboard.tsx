@@ -355,7 +355,7 @@ const AdminDashboard = () => {
               />
 
               <TouchableOpacity
-                style={[styles.addBtn, { backgroundColor: "#0b84a5" }]}
+                style={[styles.addBtn, { backgroundColor: "#173B65" }]}
                 onPress={async () => {
                   if (!schedulePrayer || !scheduleDay || !scheduleTime) {
                     Alert.alert("Please fill prayer, day, and time");
@@ -548,7 +548,7 @@ const AdminDashboard = () => {
 
               {/* add/change event image (single) */}
               <TouchableOpacity
-                style={[styles.addBtn, { backgroundColor: "#27ae60" }]}
+                style={[styles.addBtn, { backgroundColor: "#173B65" }]}
                 onPress={() =>
                   launchImageLibrary({ mediaType: "photo", quality: 0.8 }, (res) => {
                     if (res.didCancel) return;
@@ -566,7 +566,7 @@ const AdminDashboard = () => {
               {(church as any).newEventImage ? <Text style={{ fontSize: rsize(12), color: "#555", marginTop: 6 }}>Image selected ✅</Text> : null}
 
               <TouchableOpacity
-                style={[styles.addBtn, { backgroundColor: "#0b84a5" }]}
+                style={[styles.addBtn, { backgroundColor: "#173B65" }]}
                 onPress={async () => {
                   // validation
                   if (!newEventName || newEventDates.length === 0 || !newEventTimeFrom || !newEventTimeTo || !newEventType) {
@@ -772,7 +772,7 @@ const styles = StyleSheet.create({
 
   saveBtn: {
     marginTop: 12,
-    backgroundColor: "#1F7BC7",
+    backgroundColor: "#173B65",
     paddingVertical: rsize(12),
     borderRadius: 10,
     alignItems: "center",
@@ -792,7 +792,7 @@ const styles = StyleSheet.create({
   },
 
   addBtn: {
-    backgroundColor: "#2980b9",
+    backgroundColor: "#173B65",
     paddingVertical: rsize(10),
     borderRadius: 10,
     alignItems: "center",
@@ -857,7 +857,7 @@ const styles = StyleSheet.create({
   },
 
   dateChip: {
-    backgroundColor: "#10a5d8",
+    backgroundColor: "#173B65",
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 16,

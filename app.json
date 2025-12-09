@@ -16,7 +16,14 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.ekklesia.Ekklesia",
+      "usesCleartextTraffic": true,
+      "jsEngine": "hermes"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "jsEngine": "hermes"
     },
     "web": {
       "bundler": "metro",
@@ -37,6 +44,13 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4badb66d-1a87-4f9a-b338-84abf5a8fa61"
+      },
+      "API_URL": null
     }
   }
 }

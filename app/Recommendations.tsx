@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   rateBtn: { padding: 8, borderRadius: 6, backgroundColor: '#eef2f6', marginRight: 8 },
   rateBtnActive: { backgroundColor: '#173B65' },
   rateText: { color: '#173B65', fontWeight: '700' },
-  saveBtn: { marginTop: 12, backgroundColor: '#1F7BC7', padding: 12, borderRadius: 10, alignItems: 'center' },
+  saveBtn: { marginTop: 12, backgroundColor: '#173B65', padding: 12, borderRadius: 10, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontWeight: '700' },
   resultItem: { backgroundColor: '#fff', padding: 12, borderRadius: 10, marginBottom: 8 },
   small: { color: '#666', marginTop: 6 }

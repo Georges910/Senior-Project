@@ -4,6 +4,10 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Church = require('../models/ChurchsCredential');
 
+// In-memory cache for recommendations (TTL: 5 minutes)
+const recommendationCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
 function authenticate(req, res, next) {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
@@ -278,6 +282,14 @@ router.get('/', authenticate, async (req, res) => {
     const userId = req.user.id;
     console.log('[AI Recommendations] Request from user:', userId);
     
+    // Check cache first
+    const cacheKey = `recs:${userId}`;
+    const cached = recommendationCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      console.log('[AI Recommendations] Returning cached results');
+      return res.json(cached.data);
+    }
+    
     // ===================================================================
     // STEP 1: Get the current user's data from database
     // ===================================================================
@@ -344,12 +356,17 @@ router.get('/', authenticate, async (req, res) => {
           description: ev.description || ''
         }));
 
-      return res.json({
+      const response = {
         recommendations: upcomingEvents,
         message: upcomingEvents.length > 0 
           ? 'Here are some upcoming events to get started!' 
           : 'No upcoming events available.'
-      });
+      };
+      
+      // Cache the result
+      recommendationCache.set(cacheKey, { data: response, timestamp: Date.now() });
+      
+      return res.json(response);
     }
 
     // ===================================================================
@@ -443,12 +460,17 @@ router.get('/', authenticate, async (req, res) => {
     // ===================================================================
     // STEP 8: Return recommendations to the frontend
     // ===================================================================
-    return res.json({ 
+    const response = { 
       recommendations: topEvents,
       message: topEvents.length > 0 
         ? `Found ${topEvents.length} personalized recommendations based on your likes!` 
         : 'No new recommendations available. Like more events to get better suggestions!'
-    });
+    };
+    
+    // Cache the result
+    recommendationCache.set(cacheKey, { data: response, timestamp: Date.now() });
+    
+    return res.json(response);
 
   } catch (err) {
     // Log any errors that occur during the recommendation process
@@ -578,5 +600,15 @@ router.get('/debug/:email', async (req, res) => {
     return res.status(500).json({ error: err.message });
   }
 });
+
+// Clean up expired cache entries every 10 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of recommendationCache.entries()) {
+    if (now - value.timestamp > CACHE_TTL) {
+      recommendationCache.delete(key);
+    }
+  }
+}, 10 * 60 * 1000);
 
 module.exports = router;
