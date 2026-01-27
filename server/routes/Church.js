@@ -139,6 +139,32 @@ router.patch("/ekklesia/:id", async (req, res) => {
   }
 });
 
+// === Update church basic info (name, location) ===
+router.patch("/update/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, location } = req.body;
+
+    console.log('Updating church with ID:', id, 'New name:', name, 'New location:', location);
+
+    const church = await Church.findById(id);
+    if (!church) {
+      console.log('Church not found with ID:', id);
+      return res.status(404).json({ error: "Church not found" });
+    }
+
+    if (name) church.name = name;
+    if (location !== undefined) church.location = location;
+
+    await church.save();
+    console.log('Successfully updated church:', church.name);
+    res.status(200).json({ message: "Church updated successfully", church });
+  } catch (err) {
+    console.error("Error updating church:", err);
+    res.status(500).json({ error: "Server error", details: err.message });
+  }
+});
+
 // Get all churches
 router.get("/churches", async (req, res) => {
   try {
@@ -150,7 +176,7 @@ router.get("/churches", async (req, res) => {
   }
 });
 
-// === Delete specific church image ===
+// === Delete specific church image (must be before /:id route) ===
 router.delete("/:id/image", async (req, res) => {
   try {
     const { imagePath } = req.body;
@@ -164,6 +190,27 @@ router.delete("/:id/image", async (req, res) => {
   } catch (err) {
     console.error("Error deleting church image:", err);
     res.status(500).json({ error: "Server error" });
+  }
+});
+
+// === Delete church ===
+router.delete("/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log('Attempting to delete church with ID:', id);
+    
+    const church = await Church.findByIdAndDelete(id);
+    
+    if (!church) {
+      console.log('Church not found with ID:', id);
+      return res.status(404).json({ error: "Church not found" });
+    }
+
+    console.log('Successfully deleted church:', church.name);
+    res.status(200).json({ message: "Church deleted successfully", church });
+  } catch (err) {
+    console.error("Error deleting church:", err);
+    res.status(500).json({ error: "Server error", details: err.message });
   }
 });
 

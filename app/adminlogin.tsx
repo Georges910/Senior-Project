@@ -16,8 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { Picker } from "@react-native-picker/picker";
 
-//const API_URL = "http://10.65.189.128:3000"
-const API_URL = "http://localhost:3000";
+const API_URL = "http://192.168.10.249:5000";
 
 export default function AdminLogin() {
   const router = useRouter();

@@ -25,8 +25,7 @@ import BottomNav from "./Components/BottomNav";
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_MARGIN = 16;
 const CARD_WIDTH = SCREEN_WIDTH * 0.7;
-const API_URL = 'http://localhost:3000';
-//const API_URL = 'http://10.65.189.128:3000';
+const API_URL = 'http://192.168.10.249:5000';
 
 
 // ---------- Types ----------

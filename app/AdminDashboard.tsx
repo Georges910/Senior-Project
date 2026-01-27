@@ -20,7 +20,7 @@ import { launchImageLibrary } from "react-native-image-picker";
 import { getAdminProfile } from "./utils/getAdminProfile";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 
-const API_URL = "http://localhost:3000";
+const API_URL = "http://192.168.10.249:5000";
 const prayers = ["صلاة نصف الليل", "صلاة السحر", "القداس الالهي", "الساعة الأولى", "الساعة الثالثة", "الساعة السادسة", "الساعة التاسعة", "صلاة الغروب", "صلاة النوم الكبرى", "صلاة المديح", "صلاة السجدة", "القداس السابق تقديسه"];
 
 // responsive helpers

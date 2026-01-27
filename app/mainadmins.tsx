@@ -3,6 +3,7 @@ import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -13,8 +14,7 @@ import {
   View,
 } from "react-native";
 
-const API_URL = "http://localhost:3000"; 
-//const API_URL = 'http://10.65.189.128:3000';
+const API_URL = "http://192.168.10.249:5000";
 
 export default function AddAdmin() {
   const router = useRouter();
@@ -26,13 +26,19 @@ export default function AddAdmin() {
   const [successMsg, setSuccessMsg] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
-  const [churches, setChurches] = useState<{ name: string }[]>([]);
+  const [churches, setChurches] = useState<{ _id?: string; name: string }[]>([]);
   const [newChurchName, setNewChurchName] = useState("");
   const [newChurchLocation, setNewChurchLocation] = useState("");
   const [newChurchAdmins, setNewChurchAdmins] = useState("");
   const [addingChurch, setAddingChurch] = useState(false);
   const [churchSuccessMsg, setChurchSuccessMsg] = useState("");
   const [churchErrorMsg, setChurchErrorMsg] = useState("");
+  const [deletingChurchId, setDeletingChurchId] = useState<string | null>(null);
+  const [showAllChurches, setShowAllChurches] = useState(false);
+  const [editingChurch, setEditingChurch] = useState<{ _id: string; name: string; location?: string } | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editLocation, setEditLocation] = useState("");
+  const [updatingChurch, setUpdatingChurch] = useState(false);
 
   useEffect(() => {
     const fetchChurches = async () => {
@@ -142,6 +148,135 @@ export default function AddAdmin() {
     }
   };
 
+  const onDeleteChurch = async (churchId: string, churchName: string) => {
+    if (!churchId) {
+      setChurchErrorMsg("Cannot delete church: missing ID");
+      return;
+    }
+    
+    // For web platform, use window.confirm; for native, use Alert.alert
+    if (Platform.OS === 'web') {
+      const confirmed = window.confirm(`Are you sure you want to delete "${churchName}"?`);
+      if (!confirmed) return;
+      
+      await performDelete(churchId, churchName);
+    } else {
+      Alert.alert(
+        "Delete Church",
+        `Are you sure you want to delete "${churchName}"?`,
+        [
+          {
+            text: "Cancel",
+            style: "cancel"
+          },
+          {
+            text: "Delete",
+            style: "destructive",
+            onPress: () => performDelete(churchId, churchName)
+          }
+        ]
+      );
+    }
+  };
+
+  const performDelete = async (churchId: string, churchName: string) => {
+    setDeletingChurchId(churchId);
+    setChurchErrorMsg("");
+    setChurchSuccessMsg("");
+    
+    try {
+      console.log('[MainAdmins] Deleting church with ID:', churchId);
+      const res = await fetch(`${API_URL}/api/church/${churchId}`, {
+        method: "DELETE",
+      });
+      
+      console.log('[MainAdmins] Delete response status:', res.status);
+      const data = await res.json();
+      console.log('[MainAdmins] Delete response data:', data);
+      
+      if (!res.ok) {
+        setChurchErrorMsg(data?.error || "Failed to delete church");
+        setDeletingChurchId(null);
+        return;
+      }
+      
+      setChurchSuccessMsg(`Church "${churchName}" was deleted`);
+      // Remove from local state
+      setChurches((prev) => prev.filter((c) => c._id !== churchId));
+    } catch (err) {
+      console.error('[MainAdmins] Error deleting church:', err);
+      setChurchErrorMsg("Could not connect to server");
+    } finally {
+      setDeletingChurchId(null);
+    }
+  };
+
+  const onEditChurch = (church: { _id?: string; name: string; location?: string }) => {
+    if (!church._id) return;
+    setEditingChurch({ _id: church._id, name: church.name, location: church.location });
+    setEditName(church.name);
+    setEditLocation(church.location || "");
+    setChurchErrorMsg("");
+    setChurchSuccessMsg("");
+  };
+
+  const onUpdateChurch = async () => {
+    if (!editingChurch || !editName.trim()) {
+      setChurchErrorMsg("Church name is required");
+      return;
+    }
+
+    setUpdatingChurch(true);
+    setChurchErrorMsg("");
+    setChurchSuccessMsg("");
+
+    try {
+      console.log('[MainAdmins] Updating church:', editingChurch._id);
+      const res = await fetch(`${API_URL}/api/church/update/${editingChurch._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editName,
+          location: editLocation,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setChurchErrorMsg(data?.error || "Failed to update church");
+        setUpdatingChurch(false);
+        return;
+      }
+
+      setChurchSuccessMsg(`Church "${editName}" was updated`);
+      // Update local state
+      setChurches((prev) =>
+        prev.map((c) =>
+          c._id === editingChurch._id
+            ? { ...c, name: editName, location: editLocation }
+            : c
+        )
+      );
+      // Clear edit state
+      setEditingChurch(null);
+      setEditName("");
+      setEditLocation("");
+    } catch (err) {
+      console.error('[MainAdmins] Error updating church:', err);
+      setChurchErrorMsg("Could not connect to server");
+    } finally {
+      setUpdatingChurch(false);
+    }
+  };
+
+  const onCancelEdit = () => {
+    setEditingChurch(null);
+    setEditName("");
+    setEditLocation("");
+    setChurchErrorMsg("");
+  };
+
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -199,6 +334,105 @@ export default function AddAdmin() {
           {churchSuccessMsg ? <Text style={styles.successText}>{churchSuccessMsg}</Text> : null}
           {churchErrorMsg ? <Text style={styles.errorText}>{churchErrorMsg}</Text> : null}
 
+          {/* Display All Churches */}
+          {churches.length > 0 && (
+            <View style={styles.churchListContainer}>
+              <View style={styles.churchListHeader}>
+                <Text style={styles.churchListTitle}>All Churches ({churches.length})</Text>
+                {churches.length > 5 && (
+                  <TouchableOpacity onPress={() => setShowAllChurches(!showAllChurches)}>
+                    <Text style={styles.showAllButton}>
+                      {showAllChurches ? 'Show Less' : 'Show All'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Edit Form - Shows when editing a church */}
+              {editingChurch && (
+                <View style={styles.editFormContainer}>
+                  <Text style={styles.editFormTitle}>Edit Church</Text>
+                  <View style={styles.inputRow}>
+                    <Ionicons name="home-outline" size={18} color="#58617a" style={styles.leftIcon} />
+                    <TextInput
+                      placeholder="Church Name"
+                      placeholderTextColor="#96a0b4"
+                      value={editName}
+                      onChangeText={setEditName}
+                      style={styles.input}
+                    />
+                  </View>
+                  <View style={styles.inputRow}>
+                    <Ionicons name="location-outline" size={18} color="#58617a" style={styles.leftIcon} />
+                    <TextInput
+                      placeholder="Location (optional)"
+                      placeholderTextColor="#96a0b4"
+                      value={editLocation}
+                      onChangeText={setEditLocation}
+                      style={styles.input}
+                    />
+                  </View>
+                  <View style={styles.editFormButtons}>
+                    <TouchableOpacity
+                      style={[styles.cancelBtn]}
+                      onPress={onCancelEdit}
+                    >
+                      <Text style={styles.cancelBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.updateBtn, updatingChurch && { opacity: 0.7 }]}
+                      onPress={onUpdateChurch}
+                      disabled={updatingChurch}
+                    >
+                      <Text style={styles.updateBtnText}>
+                        {updatingChurch ? "Updating..." : "Update"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {(showAllChurches ? churches : churches.slice(0, 3))
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((church, index) => (
+                <View key={church._id || index} style={styles.churchItem}>
+                  <View style={styles.churchInfo}>
+                    <Ionicons name="home" size={18} color="#173B65" />
+                    <Text style={styles.churchName}>{church.name}</Text>
+                  </View>
+                  <View style={styles.churchActions}>
+                    <TouchableOpacity
+                      style={styles.editBtn}
+                      onPress={() => onEditChurch(church)}
+                      disabled={!church._id}
+                    >
+                      <Ionicons name="pencil-outline" size={18} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.deleteBtn,
+                        deletingChurchId === church._id && { opacity: 0.5 }
+                      ]}
+                      onPress={() => onDeleteChurch(church._id!, church.name)}
+                      disabled={deletingChurchId === church._id || !church._id}
+                    >
+                      {deletingChurchId === church._id ? (
+                        <Text style={styles.deleteBtnText}>Deleting...</Text>
+                      ) : (
+                        <Ionicons name="trash-outline" size={18} color="#fff" />
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+              {!showAllChurches && churches.length > 3 && (
+                <Text style={styles.hiddenChurchesText}>
+                  +{churches.length - 3} more church{churches.length - 3 !== 1 ? 'es' : ''}
+                </Text>
+              )}
+            </View>
+          )}
+
           {/* Add Admin Section */}
           <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Add an Admin</Text>
           
@@ -249,7 +483,9 @@ export default function AddAdmin() {
             >
               <Picker.Item label="Select Church" value="" color="#96a0b4" />
               {churches.length > 0 ? (
-                churches.map((c, index) => (
+                churches
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((c, index) => (
                   <Picker.Item key={c.name || index} label={c.name} value={c.name} />
                 ))
               ) : (
@@ -313,4 +549,124 @@ backText: {
   sectionTitle: { color: "#173B65", fontWeight: "bold", fontSize: 18, marginBottom: 8 },
   successText: { color: "green", marginTop: 8, textAlign: "center", fontSize: 13 },
   errorText: { color: "red", marginTop: 8, textAlign: "center", fontSize: 13 },
+  churchListContainer: {
+    width: "86%",
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  churchListHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  churchListTitle: {
+    color: "#173B65",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  showAllButton: {
+    color: "#173B65",
+    fontSize: 14,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  hiddenChurchesText: {
+    fontSize: 13,
+    color: "#7f8c8d",
+    textAlign: "center",
+    marginTop: 8,
+    fontStyle: "italic",
+  },
+  churchItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#f8f9fa",
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "#e1e8ed",
+  },
+  churchInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  churchName: {
+    fontSize: 15,
+    color: "#222",
+    marginLeft: 10,
+    fontWeight: "500",
+  },
+  deleteBtn: {
+    backgroundColor: "#e74c3c",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 40,
+    alignItems: "center",
+  },
+  deleteBtnText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  churchActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  editBtn: {
+    backgroundColor: "#3498db",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    minWidth: 40,
+    alignItems: "center",
+  },
+  editFormContainer: {
+    backgroundColor: "#e8f4f8",
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: "#3498db",
+  },
+  editFormTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#173B65",
+    marginBottom: 12,
+  },
+  editFormButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 12,
+    gap: 10,
+  },
+  cancelBtn: {
+    flex: 1,
+    backgroundColor: "#95a5a6",
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  cancelBtnText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  updateBtn: {
+    flex: 1,
+    backgroundColor: "#27ae60",
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  updateBtnText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+  },
 });
