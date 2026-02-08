@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -14,19 +14,39 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getApiUrl } from '@/app/config/api';
+import { useTheme } from '@/app/context/ThemeContext';
 
-const API_URL = "http://192.168.10.249:5000"; 
+const DEBUG = true;  // Set to false in production
 
 export default function Login() {
   const router = useRouter();
+  const { colors, theme } = useTheme();
+  const [apiUrl, setApiUrl] = useState('');
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  useEffect(() => {
+    loadApiUrl();
+  }, []);
+
+  const loadApiUrl = async () => {
+    try {
+      const url = await getApiUrl();
+      setApiUrl(url);
+      if (DEBUG) console.log("API URL loaded:", url);
+    } catch (error) {
+      console.error("Error loading API URL:", error);
+      Alert.alert("Error", "Could not load API configuration");
+    }
+  };
+
   const onLogin = async () => {
     console.log("Login button pressed");
+    console.log("API_URL:", apiUrl);
 
     if (!email || !password) {
       Alert.alert("Validation", "Please fill in both fields.");
@@ -36,7 +56,9 @@ export default function Login() {
 
     try {
       setErrorMsg("");
-      const res = await fetch(`${API_URL}/api/auth/login`, {
+      console.log("Attempting to connect to:", `${apiUrl}/api/auth/login`);
+      
+      const res = await fetch(`${apiUrl}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email, password }),
@@ -84,82 +106,99 @@ export default function Login() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      style={{ flex: 1, backgroundColor: "#0b2b52" }}
+      style={[styles.container, { backgroundColor: colors.primaryDark }]}
     >
       <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
         {/* Header */}
-        <View style={styles.header}>
+        <View style={[styles.header, { backgroundColor: colors.primaryDark }]}>
           <View style={styles.adminWrap}>
             <TouchableOpacity onPress={() => router.push("/adminlogin")}>
-              <Text style={styles.adminText}>Are You Church Admin?</Text>
+              <Text style={[styles.adminText, { color: colors.textSecondary }]}>
+                Are You Church Admin?
+              </Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.illustrationWrap}>
             <Image
               source={require("../Images/Logo.png")}
-              style={{ width: 180, height: 180 }}
+              style={styles.logo}
               resizeMode="contain"
             />
           </View>
 
-          <Text style={styles.appTitle}>Ekklesia</Text>
+          <Text style={[styles.appTitle, { color: colors.accent }]}>Ekklesia</Text>
         </View>
 
         {/* White sheet */}
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { backgroundColor: colors.card }]}>
           {/* Email */}
-          <View style={styles.inputRow}>
+          <View style={[styles.inputRow, { 
+            borderColor: colors.inputBorder,
+            backgroundColor: colors.inputBackground 
+          }]}>
             <Ionicons
               name="person-outline"
-              size={18}
-              color="#58617a"
+              size={20}
+              color={colors.icon}
               style={styles.leftIcon}
             />
             <TextInput
               placeholder="Email or Phone"
-              placeholderTextColor="#96a0b4"
+              placeholderTextColor={colors.placeholder}
               value={email}
               onChangeText={setEmail}
-              style={styles.input}
+              style={[styles.input, { color: colors.text }]}
               keyboardType="email-address"
               autoCapitalize="none"
             />
           </View>
 
           {/* Password */}
-          <View style={styles.inputRow}>
+          <View style={[styles.inputRow, { 
+            borderColor: colors.inputBorder,
+            backgroundColor: colors.inputBackground 
+          }]}>
             <Ionicons
               name="lock-closed-outline"
-              size={18}
-              color="#58617a"
+              size={20}
+              color={colors.icon}
               style={styles.leftIcon}
             />
             <TextInput
               placeholder="Password"
-              placeholderTextColor="#96a0b4"
+              placeholderTextColor={colors.placeholder}
               value={password}
               onChangeText={setPassword}
-              style={styles.input}
+              style={[styles.input, { color: colors.text }]}
               secureTextEntry={!showPassword}
             />
             <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
               <Ionicons
                 name={showPassword ? "eye-off-outline" : "eye-outline"}
-                size={18}
-                color="#58617a" 
+                size={20}
+                color={colors.icon} 
               />
             </TouchableOpacity>
           </View>
 
           {/* Forgot password */}
-          <TouchableOpacity style={{ alignSelf: "center", marginTop: 10 }} onPress={() => router.push({ pathname: '/forgepassword', params: { email } })}>
-            <Text style={styles.forgot}>Forgot Password?</Text>
+          <TouchableOpacity 
+            style={styles.forgotWrapper} 
+            onPress={() => router.push({ pathname: '/forgepassword', params: { email } })}
+          >
+            <Text style={[styles.forgot, { color: colors.textSecondary }]}>
+              Forgot Password?
+            </Text>
           </TouchableOpacity>
 
           {/* Login */}
           <TouchableOpacity
-            style={[styles.loginBtn, loading && { opacity: 0.7 }]}
+            style={[
+              styles.loginBtn,
+              { backgroundColor: colors.primary, borderColor: colors.borderLight },
+              loading && { opacity: 0.7 }
+            ]}
             onPress={onLogin}
             disabled={loading}
           >
@@ -170,26 +209,27 @@ export default function Login() {
 
           {/* Error message */}
           {errorMsg ? (
-            <Text
-              style={{
-                color: "red",
-                marginTop: 8,
-                textAlign: "center",
-                fontSize: 13,
-              }}
-            >
-              {errorMsg}
-            </Text>
+            <View style={[styles.errorBox, { backgroundColor: colors.errorBg }]}>
+              <Ionicons name="alert-circle" size={18} color={colors.error} />
+              <Text style={[styles.errorMsg, { color: colors.errorText }]}>
+                {errorMsg}
+              </Text>
+            </View>
           ) : null}
 
-          <Text style={styles.or}>or</Text>
+          <Text style={[styles.or, { color: colors.textMuted }]}>or</Text>
 
           {/* Create account */}
           <TouchableOpacity
-            style={styles.createBtn}
+            style={[styles.createBtn, { 
+              backgroundColor: colors.background,
+              borderColor: colors.border 
+            }]}
             onPress={() => router.push("/signup")}
           >
-            <Text style={styles.createText}>Create an account</Text>
+            <Text style={[styles.createText, { color: colors.primary }]}>
+              Create an account
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -198,85 +238,122 @@ export default function Login() {
 }
 
 const styles = StyleSheet.create({
+  container: { flex: 1 },
   header: {
-    paddingTop: 28,
-    paddingHorizontal: 22,
-    backgroundColor: "#0b2b52",
-    alignItems: "center", // keeps logo + title centered
+    paddingTop: 40,
+    paddingHorizontal: 24,
+    alignItems: "center",
+    paddingBottom: 20,
   },
   adminWrap: {
-    alignSelf: "flex-start", // push admin text to the left
+    alignSelf: "flex-start",
+    marginBottom: 8,
   },
   adminText: {
-    color: "#c6d3e6",
-    fontSize: 12,
-    textAlign: "left",
-    marginBottom: 6,
+    fontSize: 13,
+    fontWeight: "500",
   },
-  illustrationWrap: { alignItems: "center", marginTop: 8 },
-  circle: {
-    width: 190,
-    height: 190,
-    borderRadius: 95,
-    backgroundColor: "#17365f",
-    alignItems: "center",
-    justifyContent: "center",
+  illustrationWrap: { 
+    alignItems: "center", 
+    marginVertical: 16 
+  },
+  logo: {
+    width: 180,
+    height: 180,
   },
   appTitle: {
-    marginTop: 10,
-    fontSize: 36,
-    fontWeight: "800",
-    color: "#F4C430",
-    letterSpacing: 3,
-    marginBottom: 20,
+    fontSize: 42,
+    fontWeight: "900",
+    letterSpacing: 4,
+    marginBottom: 8,
   },
   sheet: {
     flexGrow: 1,
-    backgroundColor: "#fff",
-    marginTop: 16,
-    borderTopLeftRadius: 36,
-    borderTopRightRadius: 36,
-    paddingTop: 18,
-    paddingBottom: 34,
+    marginTop: 20,
+    borderTopLeftRadius: 40,
+    borderTopRightRadius: 40,
+    paddingTop: 32,
+    paddingBottom: 40,
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
   },
   inputRow: {
-    width: "86%",
+    width: "88%",
     flexDirection: "row",
     alignItems: "center",
-    borderColor: "#4b5a79",
-    borderWidth: 1.2,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: 28,
-    marginTop: 12,
-    backgroundColor: "#fff",
+    borderWidth: 1.5,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 16,
+    marginTop: 14,
   },
-  leftIcon: { marginRight: 8 },
-  input: { flex: 1, fontSize: 15, color: "#222" },
-  forgot: { fontSize: 12, color: "#6d7486" },
+  leftIcon: { marginRight: 10 },
+  input: { 
+    flex: 1, 
+    fontSize: 16, 
+    fontWeight: "500" 
+  },
+  forgotWrapper: { 
+    alignSelf: "center", 
+    marginTop: 14 
+  },
+  forgot: { 
+    fontSize: 13, 
+    fontWeight: "600" 
+  },
   loginBtn: {
-    width: "86%",
-    marginTop: 18,
-    backgroundColor: "#173B65",
-    paddingVertical: 14,
-    borderRadius: 24,
+    width: "88%",
+    marginTop: 24,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#e7ecf6",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  loginText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  or: { marginTop: 14, color: "#9aa1b6" },
+  loginText: { 
+    color: "#fff", 
+    fontWeight: "800", 
+    fontSize: 17,
+    letterSpacing: 0.5,
+  },
+  errorBox: {
+    width: "88%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 12,
+    borderRadius: 12,
+    marginTop: 16,
+    gap: 8,
+  },
+  errorMsg: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  or: { 
+    marginTop: 20, 
+    fontSize: 14,
+    fontWeight: "500",
+  },
   createBtn: {
-    width: "86%",
-    marginTop: 10,
-    backgroundColor: "#fff",
-    paddingVertical: 14,
-    borderRadius: 24,
+    width: "88%",
+    marginTop: 14,
+    paddingVertical: 16,
+    borderRadius: 16,
     alignItems: "center",
-    borderWidth: 1.4,
-    borderColor: "#4b5a79",
+    borderWidth: 1.5,
   },
-  createText: { color: "#0b2b52", fontWeight: "700", fontSize: 16 },
+  createText: { 
+    fontWeight: "800", 
+    fontSize: 17,
+    letterSpacing: 0.5,
+  },
 });
 

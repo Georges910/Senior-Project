@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-
-const API_URL = 'http://192.168.10.249:5000';
+import API_URL from '@/app/config/api';
 
 export default function ResetPasswordPage() {
   const router = useRouter();

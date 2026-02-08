@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useEffect, useRef, useState } from "react";
+import API_URL from "@/app/config/api";
 import {
   FlatList, Image, Linking,
   Modal, Platform, ScrollView, StyleSheet, Text, TextInput,
@@ -69,7 +70,6 @@ const FindChurchScreen = () => {
     if (hasFetched.current) return;
     const fetchChurches = async () => {
       try {
-        const API_URL = "http://192.168.10.249:5000";
         const res = await fetch(`${API_URL}/api/church/churches`);
         const data = await res.json();
         if (Array.isArray(data.churches)) {

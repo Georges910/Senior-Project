@@ -13,8 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-
-const API_URL = 'http://192.168.10.249:5000';
+import API_URL from '@/app/config/api';
 
 
 export default function ForgePassword() {

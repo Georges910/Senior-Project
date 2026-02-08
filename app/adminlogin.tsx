@@ -15,8 +15,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import { Picker } from "@react-native-picker/picker";
-
-const API_URL = "http://192.168.10.249:5000";
+import API_URL from '@/app/config/api';
 
 export default function AdminLogin() {
   const router = useRouter();

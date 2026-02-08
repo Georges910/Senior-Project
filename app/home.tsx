@@ -21,11 +21,14 @@ import {
   View,
 } from 'react-native';
 import BottomNav from "./Components/BottomNav";
+import { useTheme } from '@/app/context/ThemeContext';
+import { getApiUrl } from '@/app/config/api';
 
+
+// ---------- Constants ----------
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_MARGIN = 16;
 const CARD_WIDTH = SCREEN_WIDTH * 0.7;
-const API_URL = 'http://192.168.10.249:5000';
 
 
 // ---------- Types ----------
@@ -64,7 +67,8 @@ const Api = {
 
   async getRecommendedEvents(): Promise<EventItem[]> {
     try {
-      const res = await fetch(`${API_URL}/api/event`);
+      const apiUrl = await getApiUrl();
+      const res = await fetch(`${apiUrl}/api/event`);
       if (!res.ok) throw new Error('Failed to fetch events');
       const data = await res.json();
       if (!Array.isArray(data)) return [];
@@ -90,7 +94,8 @@ const Api = {
       const user: UserProfile = JSON.parse(userRaw);
       if (!user?.parish) return [];
 
-      const res = await fetch(`${API_URL}/api/church/${encodeURIComponent(user.parish)}/schedule`);
+      const apiUrl = await getApiUrl();
+      const res = await fetch(`${apiUrl}/api/church/${encodeURIComponent(user.parish)}/schedule`);
       if (!res.ok) throw new Error('Failed to fetch prayers');
 
       const data = await res.json();
@@ -167,6 +172,7 @@ const getEventStartMinutes = (ev: EventItem) => {
 // ---------- HomeScreen ----------
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<any>();
+  const { colors } = useTheme();
   const isRTL = I18nManager.isRTL;
 
   const [loading, setLoading] = useState(false);
@@ -198,10 +204,11 @@ const HomeScreen: React.FC = () => {
       }
 
       // Fetch all data in parallel (verse, prayers, churches)
+      const apiUrl = await getApiUrl();
       const [v, p, churchesRes] = await Promise.all([
         Api.getVerseOfDay(),
         Api.getPrayerScheduleForSelectedChurch(),
-        fetch(`${API_URL}/api/church/churches`).then(r => r.ok ? r.json() : { churches: [] }).catch(() => ({ churches: [] }))
+        fetch(`${apiUrl}/api/church/churches`).then(r => r.ok ? r.json() : { churches: [] }).catch(() => ({ churches: [] }))
       ]);
 
       setUser(u);
@@ -341,24 +348,24 @@ const HomeScreen: React.FC = () => {
   }, [loadAll]);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: colors.backgroundSecondary }]}>
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={[styles.scrollContent, { backgroundColor: colors.backgroundSecondary }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* Top Bar */}
         <View style={styles.topRow}>
           <View style={[styles.profileRow, isRTL && styles.rowRTL]}>
             <View style={[styles.profileTextWrap, isRTL && { marginRight: 10 }]}>
-              <Text style={styles.nameText}>{user?.fullName || 'Full Name'}</Text>
+              <Text style={[styles.nameText, { color: colors.text }]}>{user?.fullName || 'Full Name'}</Text>
               <View style={[styles.parishRow, isRTL && styles.rowRTL]}>
-                <MaterialCommunityIcons name="map-marker" size={14} />
-                <Text style={styles.parishText}>{user?.parish || 'Parish'}</Text>
+                <MaterialCommunityIcons name="map-marker" size={14} color={colors.textMuted} />
+                <Text style={[styles.parishText, { color: colors.textMuted }]}>{user?.parish || 'Parish'}</Text>
               </View>
             </View>
           </View>
-          <TouchableOpacity style={styles.iconButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={28} color="black" />
+          <TouchableOpacity style={[styles.iconButton, { backgroundColor: colors.card }]} onPress={handleLogout}>
+            <Ionicons name="log-out-outline" size={28} color={colors.primary} />
           </TouchableOpacity>
         </View>
 
@@ -375,18 +382,18 @@ const HomeScreen: React.FC = () => {
         </View>
 
         {/* Daily Prayer Schedule */}
-        <SectionHeader title={isRTL ? 'جدول الصلوات اليومية' : 'Daily Prayer Schedule'} />
-        <View style={styles.prayersCard}>
-          <Text style={styles.dateText}>{Api.todayLabel()}</Text>
-          <View style={styles.prayersList}>
+        <SectionHeader title={isRTL ? 'جدول الصلوات اليومية' : 'Daily Prayer Schedule'} colors={colors} />
+        <View style={[styles.prayersCard, { backgroundColor: colors.backgroundSecondary }]}>
+          <Text style={[styles.dateText, { color: colors.textMuted }]}>{Api.todayLabel()}</Text>
+          <View style={[styles.prayersList, { backgroundColor: colors.card }]}>
             {loading && prayers.length === 0 ? <SkeletonPrayerList /> :
               prayers.map((p) => (
-                <View key={p.id} style={[styles.prayerRowCustom, isRTL && styles.rowRTL]}>
+                <View key={p.id} style={[styles.prayerRowCustom, { borderBottomColor: colors.border }, isRTL && styles.rowRTL]}>
                   <View style={styles.timeColumn}>
-                    <Text style={styles.prayerDate}>{formatDate(p.date)}</Text>
-                    <Text style={styles.prayerTime}>{p.time}</Text>
+                    <Text style={[styles.prayerDate, { color: colors.textMuted }]}>{formatDate(p.date)}</Text>
+                    <Text style={[styles.prayerTime, { color: colors.primary }]}>{p.time}</Text>
                   </View>
-                  <Text style={styles.prayerTitle}>{p.titleAr}</Text>
+                  <Text style={[styles.prayerTitle, { color: colors.text }]}>{p.titleAr}</Text>
                 </View>
               ))
             }
@@ -546,11 +553,13 @@ const HomeScreen: React.FC = () => {
 export default HomeScreen;
 
 // ---------- Components ----------
-const SectionHeader: React.FC<{ title: string; onPress?: () => void }> = ({ title }) => {
+const SectionHeader: React.FC<{ title: string; onPress?: () => void; colors?: any }> = ({ title, colors: themeColors }) => {
+  const { colors: defaultColors } = useTheme();
+  const themedColors = themeColors || defaultColors;
   const isRTL = I18nManager.isRTL;
   return (
     <View style={[styles.sectionHeader, isRTL && styles.rowRTL]}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <Text style={[styles.sectionTitle, { color: themedColors.text }]}>{title}</Text>
     </View>
   );
 };
@@ -612,102 +621,121 @@ const EventCard = React.memo<{ item: EventItem; onPress: () => void; liked?: boo
   });
 
 // ---------- Styles ----------
-const COLORS = { bg: '#f7f9fb', card: '#fff', primary: '#173B65', accent: '#1F7BC7', textDark: '#0b2239', textDim: '#5e6c79' };
-const styles = StyleSheet.create({
-  eventCard: {
-    width: CARD_WIDTH,
-    marginRight: CARD_MARGIN,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
-    overflow: 'hidden',
-    minHeight: 230,
-  },
+const createStyles = (colors: any) => {
+  return StyleSheet.create({
+    eventCard: {
+      width: CARD_WIDTH,
+      marginRight: CARD_MARGIN,
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      shadowColor: colors.shadow,
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 4,
+      overflow: 'hidden',
+      minHeight: 240,
+    },
+    eventImage: {
+      width: '100%',
+      height: 160,
+      backgroundColor: colors.backgroundTertiary,
+      borderTopLeftRadius: 14,
+      borderTopRightRadius: 14,
+    },
+    eventDetails: {
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+    },
+    eventTitle: {
+      fontSize: 16,
+      fontWeight: '800',
+      color: colors.primary,
+      margin: 4,
+    },
+    eventText: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginBottom: 6,
+      fontWeight: '500',
+    },
+    safe: { flex: 1, backgroundColor: colors.backgroundSecondary },
+    scrollContent: { paddingBottom: 24, backgroundColor: colors.backgroundSecondary },
+    topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
+    profileRow: { flexDirection: 'row', alignItems: 'center' },
+    rowRTL: { flexDirection: 'row-reverse' },
+    avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.border },
+    profileTextWrap: { marginLeft: 10 },
+    parishRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    nameText: { fontSize: 14, fontWeight: '800', color: colors.text },
+    parishText: { fontSize: 12, color: colors.textMuted },
+    notifBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.card, alignItems: 'center', justifyContent: 'center', shadowColor: colors.shadow, shadowOpacity: 0.1, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+    iconButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', shadowColor: colors.shadow, shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+    bannerCard: { paddingHorizontal: 16, paddingVertical: 8 },
+    bannerImage: { width: '100%', height: SCREEN_WIDTH * 0.35, borderRadius: 16 },
+    bannerImageRadius: { borderRadius: 16 },
+    bannerGradient: { ...StyleSheet.absoluteFillObject },
+    sectionHeader: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    sectionTitle: { fontSize: 15, fontWeight: '800', color: colors.text },
+    prayersCard: { backgroundColor: colors.backgroundSecondary, paddingHorizontal: 16, paddingBottom: 12 },
+    dateText: { fontSize: 12, color: colors.textMuted, marginBottom: 8, fontWeight: '600' },
+    prayersList: { borderRadius: 16, backgroundColor: colors.card, paddingHorizontal: 16, paddingVertical: 12, shadowColor: colors.shadow, shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
+    prayerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border },
+    skeletonRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 24, backgroundColor: colors.backgroundTertiary, borderRadius: 6 },
+    eventMeta: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
+    prayerRowCustom: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    timeColumn: {
+      flexDirection: 'column',
+      alignItems: 'flex-start',
+      width: 90,
+    },
+    prayerDate: {
+      fontSize: 11,
+      color: colors.textMuted,
+      marginBottom: 3,
+      lineHeight: 14,
+      fontWeight: '500',
+    },
+    prayerTime: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.primary,
+      lineHeight: 18,
+    },
+    prayerTitle: {
+      fontSize: 13,
+      color: colors.text,
+      fontWeight: '600',
+      flexShrink: 1,
+    },
+  });
+};
 
-  eventImage: {
-    width: '100%',
-    height: 160,
-    backgroundColor: "#f7f7f7",
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-  },
-  eventDetails: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  eventTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#173B65',
-    margin: 5,
+const useHomeStyles = () => {
+  const { colors } = useTheme();
+  return React.useMemo(() => createStyles(colors), [colors]);
+};
 
-  },
-  eventText: {
-    fontSize: 13,
-    color: '#444',
-    marginBottom: 6,
-  },
-  safe: { flex: 1, backgroundColor: COLORS.bg },
-  scrollContent: { paddingBottom: 24 },
-  topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 },
-  profileRow: { flexDirection: 'row', alignItems: 'center' },
-  rowRTL: { flexDirection: 'row-reverse' },
-  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#ddd' },
-  profileTextWrap: { marginLeft: 10 },
-  parishRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  nameText: { fontSize: 14, fontWeight: '700', color: COLORS.textDark },
-  parishText: { fontSize: 12, color: COLORS.textDim },
-  notifBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: COLORS.card, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  iconButton: { marginLeft: 15 },
-  bannerCard: { paddingHorizontal: 16, paddingVertical: 8 },
-  bannerImage: { width: '100%', height: SCREEN_WIDTH * 0.35, borderRadius: 14 },
-  bannerImageRadius: { borderRadius: 14 },
-  bannerGradient: { ...StyleSheet.absoluteFillObject },
-  sectionHeader: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitle: { fontSize: 13, color: COLORS.textDark, fontWeight: '700' },
-  prayersCard: { backgroundColor: COLORS.bg, paddingHorizontal: 16, paddingBottom: 8 },
-  dateText: { fontSize: 11, color: COLORS.textDim, marginBottom: 6 },
-  prayersList: { borderRadius: 14, backgroundColor: COLORS.card, paddingHorizontal: 14, paddingVertical: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 2 },
-  prayerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#eef0f3' },
-  skeletonRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', height: 24, backgroundColor: '#e0e0e0', borderRadius: 6 },
-  eventMeta: { fontSize: 10, color: COLORS.textDim },
-  prayerRowCustom: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eef0f3',
-  },
-
-  timeColumn: {
-    flexDirection: 'column',
-    alignItems: 'flex-start',  // date above time
-    width: 80,                  // fixed width for all rows
-  },
-
-  prayerDate: {
-    fontSize: 11,
-    color: COLORS.textDim,
-    marginBottom: 2,
-    lineHeight: 14,
-  },
-
-  prayerTime: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.primary,
-    lineHeight: 16,
-  },
-
-  prayerTitle: {
-    fontSize: 12,
-    color: COLORS.textDark,
-    fontWeight: '500',
-    flexShrink: 1,             // allow long titles to wrap
-  },
+// For backward compatibility with the EventCard memoized component
+const styles = createStyles({
+  bg: '#f7f9fb',
+  card: '#fff',
+  primary: '#173B65',
+  accent: '#1F7BC7',
+  textDark: '#0b2239',
+  textDim: '#5e6c79',
+  shadow: 'rgba(0, 0, 0, 0.1)',
+  border: '#e0e0e0',
+  backgroundSecondary: '#f7f9fb',
+  backgroundTertiary: '#f0f0f0',
+  text: '#0b2239',
+  textSecondary: '#444',
+  textMuted: '#5e6c79',
 });

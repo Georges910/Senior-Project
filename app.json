@@ -9,20 +9,17 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "jsEngine": "hermes"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#173B65"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.ekklesia.Ekklesia",
       "usesCleartextTraffic": true,
-      "jsEngine": "hermes"
-    },
-    "ios": {
-      "supportsTablet": true,
       "jsEngine": "hermes"
     },
     "web": {
@@ -48,9 +45,10 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "4badb66d-1a87-4f9a-b338-84abf5a8fa61"
+        "projectId": "8a397089-f401-425a-b7c9-87ed0f8683aa"
       },
-      "API_URL": null
-    }
+      "API_URL": {}
+    },
+    "owner": "fadi_nassar"
   }
 }

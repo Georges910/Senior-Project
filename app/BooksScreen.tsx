@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
+import API_URL from "@/app/config/api";
 import {
     ActivityIndicator,
     Dimensions,
@@ -39,7 +40,6 @@ const FindBooksScreen = () => {
     useEffect(() => {
         const fetchBooks = async () => {
             try {
-                const API_URL = 'http://192.168.10.249:5000';
                 const response = await fetch(`${API_URL}/api/books/book`);
                 if (!response.ok) throw new Error("Failed to fetch books");
                 const data: Book[] = await response.json();

@@ -13,8 +13,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import API_URL from '@/app/config/api';
 
-const API_URL = "http://192.168.10.249:5000";
+const API_URL_DUPLICATE = "http://192.168.10.249:5000";
 
 export default function AddAdmin() {
   const router = useRouter();
